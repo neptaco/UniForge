@@ -1,0 +1,101 @@
+version: '3'
+
+vars:
+  BINARY_NAME: unity-cli
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  LDFLAGS: -X main.version={{.VERSION}}
+
+tasks:
+  default:
+    cmds:
+      - task: build
+
+  build:
+    desc: Build for current platform
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}} main.go
+
+  build-all:
+    desc: Build for all platforms
+    deps: [clean]
+    cmds:
+      - task: build-darwin-amd64
+      - task: build-darwin-arm64
+      - task: build-linux-amd64
+      - task: build-linux-arm64
+      - task: build-windows-amd64
+
+  build-darwin-amd64:
+    cmds:
+      - GOOS=darwin GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-amd64 main.go
+
+  build-darwin-arm64:
+    cmds:
+      - GOOS=darwin GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-arm64 main.go
+
+  build-linux-amd64:
+    cmds:
+      - GOOS=linux GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-linux-amd64 main.go
+
+  build-linux-arm64:
+    cmds:
+      - GOOS=linux GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-linux-arm64 main.go
+
+  build-windows-amd64:
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-windows-amd64.exe main.go
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+
+  test-coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - task: test
+      - go tool cover -html=coverage.out -o coverage.html
+
+  lint:
+    desc: Run linters
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+      - goimports -w .
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf dist/
+      - rm -f coverage.out coverage.html
+
+  install:
+    desc: Install to GOPATH
+    cmds:
+      - go install -ldflags "{{.LDFLAGS}}"
+
+  release:
+    desc: Create release with goreleaser
+    cmds:
+      - goreleaser release --clean
+
+  release-snapshot:
+    desc: Create snapshot release
+    cmds:
+      - goreleaser release --snapshot --clean
+
+  deps:
+    desc: Download dependencies
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  dev:
+    desc: Run in development mode
+    cmds:
+      - go run main.go {{.CLI_ARGS}}
