@@ -1,0 +1,115 @@
+name: Windows Unity Build Example
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Unity CLI (Windows)
+      run: |
+        # Download the latest Windows binary
+        $url = "https://github.com/neptaco/unity-cli/releases/latest/download/unity-cli_windows_amd64.zip"
+        $output = "unity-cli.zip"
+        Invoke-WebRequest -Uri $url -OutFile $output
+        
+        # Extract and install
+        Expand-Archive -Path $output -DestinationPath "."
+        Move-Item "unity-cli_windows_amd64/unity-cli.exe" "unity-cli.exe"
+        Remove-Item $output -Force
+        Remove-Item "unity-cli_windows_amd64" -Recurse -Force
+        
+        # Add to PATH for this session
+        $env:PATH = "$env:PATH;$pwd"
+        
+        # Verify installation
+        .\unity-cli.exe --help
+        
+    - name: Install Unity Editor
+      run: |
+        # Install Unity Editor for the project
+        .\unity-cli.exe editor install --from-project . --modules windows
+        
+    - name: Run Unity Tests
+      run: |
+        .\unity-cli.exe run `
+          --project . `
+          --execute-method CI.TestRunner.RunTests `
+          --test-results .\test-results.xml `
+          --quit
+          
+    - name: Build Windows Application
+      run: |
+        .\unity-cli.exe build `
+          --project . `
+          --target windows `
+          --method CI.Builder.BuildWindows `
+          --output .\Build\Windows `
+          --ci-mode `
+          --fail-on-warning
+          
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: Build/Windows/
+        
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: test-results.xml
+
+  build-cross-platform:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [windows, android, webgl]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Unity CLI (Windows)
+      run: |
+        $url = "https://github.com/neptaco/unity-cli/releases/latest/download/unity-cli_windows_amd64.zip"
+        $output = "unity-cli.zip"
+        Invoke-WebRequest -Uri $url -OutFile $output
+        Expand-Archive -Path $output -DestinationPath "."
+        Move-Item "unity-cli_windows_amd64/unity-cli.exe" "unity-cli.exe"
+        Remove-Item $output -Force
+        Remove-Item "unity-cli_windows_amd64" -Recurse -Force
+        $env:PATH = "$env:PATH;$pwd"
+        
+    - name: Install Unity Editor with modules
+      run: |
+        $modules = switch(${{ matrix.target }}) {
+          "android" { "android" }
+          "webgl" { "webgl" }
+          default { "windows" }
+        }
+        .\unity-cli.exe editor install --from-project . --modules $modules
+        
+    - name: Build for ${{ matrix.target }}
+      run: |
+        .\unity-cli.exe build `
+          --project . `
+          --target ${{ matrix.target }} `
+          --output ".\Build\${{ matrix.target }}" `
+          --ci-mode
+          
+    - name: Upload ${{ matrix.target }} Build
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.target }}-build
+        path: Build/${{ matrix.target }}/

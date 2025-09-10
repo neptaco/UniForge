@@ -15,7 +15,6 @@ import (
 type Logger struct {
 	file       *os.File
 	writer     io.Writer
-	scanner    *bufio.Scanner
 	ciMode     bool
 	warnings   int
 	errors     int
@@ -50,7 +49,7 @@ func New(logFile string, ciMode bool) *Logger {
 	}
 
 	l.pipeReader, l.pipeWriter = io.Pipe()
-	
+
 	go l.processLogs()
 
 	return l
@@ -73,9 +72,9 @@ func (l *Logger) processLine(line string) {
 	defer l.mutex.Unlock()
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	
+
 	lowerLine := strings.ToLower(line)
-	
+
 	if strings.Contains(lowerLine, "warning:") || strings.Contains(lowerLine, "warn:") {
 		l.warnings++
 		if l.ciMode {
@@ -121,18 +120,18 @@ func (l *Logger) Close() error {
 	if l.pipeWriter != nil {
 		l.pipeWriter.Close()
 	}
-	
+
 	time.Sleep(100 * time.Millisecond)
-	
+
 	warnings, errors := l.GetStats()
 	if warnings > 0 || errors > 0 {
 		summary := fmt.Sprintf("\n=== Build Summary ===\nWarnings: %d\nErrors: %d\n", warnings, errors)
 		fmt.Fprint(l.writer, summary)
 	}
-	
+
 	if l.file != nil {
 		return l.file.Close()
 	}
-	
+
 	return nil
 }

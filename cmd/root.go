@@ -41,8 +41,12 @@ func init() {
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 
-	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
-	viper.BindPFlag("no-color", rootCmd.PersistentFlags().Lookup("no-color"))
+	if err := viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
+		logrus.Fatalf("Failed to bind log-level flag: %v", err)
+	}
+	if err := viper.BindPFlag("no-color", rootCmd.PersistentFlags().Lookup("no-color")); err != nil {
+		logrus.Fatalf("Failed to bind no-color flag: %v", err)
+	}
 }
 
 func initConfig() {

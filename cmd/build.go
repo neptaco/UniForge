@@ -42,7 +42,9 @@ func init() {
 	buildCmd.Flags().BoolVar(&buildFailOnWarn, "fail-on-warning", false, "Fail build on warnings")
 	buildCmd.Flags().IntVar(&buildTimeout, "timeout", 3600, "Build timeout in seconds")
 
-	buildCmd.MarkFlagRequired("target")
+	if err := buildCmd.MarkFlagRequired("target"); err != nil {
+		logrus.Fatalf("Failed to mark target flag as required: %v", err)
+	}
 }
 
 func runBuild(cmd *cobra.Command, args []string) error {
@@ -54,15 +56,15 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	}
 
 	buildConfig := unity.BuildConfig{
-		ProjectPath:     buildProject,
-		Target:          buildTarget,
-		OutputPath:      buildOutput,
-		Method:          buildMethod,
-		Args:            parseArgs(buildArgs),
-		LogFile:         buildLogFile,
-		CIMode:          buildCIMode,
-		FailOnWarning:   buildFailOnWarn,
-		TimeoutSeconds:  buildTimeout,
+		ProjectPath:    buildProject,
+		Target:         buildTarget,
+		OutputPath:     buildOutput,
+		Method:         buildMethod,
+		Args:           parseArgs(buildArgs),
+		LogFile:        buildLogFile,
+		CIMode:         buildCIMode,
+		FailOnWarning:  buildFailOnWarn,
+		TimeoutSeconds: buildTimeout,
 	}
 
 	builder := unity.NewBuilder(project)

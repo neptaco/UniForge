@@ -45,6 +45,13 @@ task build
 - Go 1.21+ (for building from source)
 - Task (for building from source)
 
+### Windows-specific Requirements
+
+- PowerShell 5.1+ or PowerShell Core 6+
+- Unity Hub for Windows
+- Visual Studio Build Tools (for certain build targets)
+- Windows SDK (for Windows builds)
+
 ## Usage
 
 ### Manage Unity Editor
@@ -139,6 +146,8 @@ no-color: false
 
 ### GitHub Actions
 
+#### Linux/macOS
+
 ```yaml
 name: Build Unity Project
 
@@ -174,6 +183,57 @@ jobs:
             --target android \
             --method CI.Builder.BuildAndroid \
             --output ./Build/Android \
+            --ci-mode
+```
+
+#### Windows
+
+```yaml
+name: Build Unity Project (Windows)
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Unity CLI (Windows)
+        run: |
+          # Download Windows binary
+          $url = "https://github.com/neptaco/unity-cli/releases/latest/download/unity-cli_windows_amd64.zip"
+          $output = "unity-cli.zip"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          
+          # Extract and install
+          Expand-Archive -Path $output -DestinationPath "."
+          Move-Item "unity-cli_windows_amd64/unity-cli.exe" "unity-cli.exe"
+          Remove-Item $output -Force
+          Remove-Item "unity-cli_windows_amd64" -Recurse -Force
+          
+          # Add to PATH
+          $env:PATH = "$env:PATH;$pwd"
+      
+      - name: Install Unity
+        run: |
+          .\unity-cli.exe editor install --from-project . --modules windows
+      
+      - name: Run Tests
+        run: |
+          .\unity-cli.exe run `
+            --project . `
+            --execute-method CI.TestRunner.RunTests `
+            --test-results .\test-results.xml `
+            --quit
+      
+      - name: Build Windows
+        run: |
+          .\unity-cli.exe build `
+            --project . `
+            --target windows `
+            --method CI.Builder.BuildWindows `
+            --output .\Build\Windows `
             --ci-mode
 ```
 
@@ -234,6 +294,34 @@ unity-cli/
 ├── scripts/       # Build and installation scripts
 └── .github/       # GitHub Actions workflows
 ```
+
+## Troubleshooting
+
+### Windows-specific Issues
+
+#### PowerShell Execution Policy
+If you encounter execution policy errors:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+#### Unity Hub Path Issues
+If Unity Hub is not found automatically:
+```powershell
+$env:UNITY_CLI_HUB_PATH = "C:\Program Files\Unity\Hub\Unity Hub.exe"
+```
+
+#### Long Path Support
+For projects with deep directory structures:
+```powershell
+# Enable long path support (requires admin)
+New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+```
+
+#### Build Failures
+- Ensure Visual Studio Build Tools are installed
+- Check Windows SDK version compatibility
+- Verify Unity Editor modules are properly installed
 
 ## License
 
