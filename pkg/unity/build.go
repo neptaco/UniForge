@@ -48,22 +48,31 @@ func (b *Builder) Build(config BuildConfig) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	args := b.buildArgs(config)
-	
+	// Convert to absolute path to avoid issues with relative paths
+	absProjectPath, err := filepath.Abs(config.ProjectPath)
+	if err != nil {
+		absProjectPath = config.ProjectPath // fallback to original if abs fails
+	}
+
+	args := b.buildArgs(absProjectPath, config)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.TimeoutSeconds)*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, editorPath, args...)
-	
+
 	log := logger.New(config.LogFile, config.CIMode)
 	defer log.Close()
 
 	cmd.Stdout = log
 	cmd.Stderr = log
-	cmd.Dir = config.ProjectPath
+
+	// Set working directory to parent of project directory
+	projectDir := filepath.Dir(absProjectPath)
+	cmd.Dir = projectDir
 
 	logrus.Infof("Starting Unity build with command: %s %s", editorPath, strings.Join(args, " "))
-	
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start Unity: %w", err)
 	}
@@ -82,9 +91,12 @@ func (b *Builder) Build(config BuildConfig) error {
 	return nil
 }
 
-func (b *Builder) buildArgs(config BuildConfig) []string {
+func (b *Builder) buildArgs(absProjectPath string, config BuildConfig) []string {
+	// Use only the project directory name for -projectPath
+	projectName := filepath.Base(absProjectPath)
+
 	args := []string{
-		"-projectPath", config.ProjectPath,
+		"-projectPath", projectName,
 		"-batchmode",
 		"-nographics",
 		"-quit",
@@ -103,7 +115,7 @@ func (b *Builder) buildArgs(config BuildConfig) []string {
 
 	if config.Method != "" {
 		args = append(args, "-executeMethod", config.Method)
-		
+
 		if len(config.Args) > 0 {
 			for k, v := range config.Args {
 				args = append(args, fmt.Sprintf("-%s", k), v)
@@ -111,7 +123,7 @@ func (b *Builder) buildArgs(config BuildConfig) []string {
 		}
 	} else {
 		outputPath := filepath.Join(config.OutputPath, b.getDefaultOutputName(config.Target))
-		
+
 		switch config.Target {
 		case "windows":
 			args = append(args, "-buildWindows64Player", outputPath)
@@ -138,17 +150,17 @@ func (b *Builder) mapBuildTarget(target string) string {
 		"ios":     "iOS",
 		"webgl":   "WebGL",
 	}
-	
+
 	return targets[strings.ToLower(target)]
 }
 
 func (b *Builder) getDefaultOutputName(target string) string {
 	ext := platform.GetExecutableExtension(target)
 	baseName := b.project.Name
-	
+
 	if ext != "" {
 		return baseName + ext
 	}
-	
+
 	return baseName
 }

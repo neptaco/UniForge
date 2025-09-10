@@ -487,12 +487,26 @@ func (c *Client) parseEditorsList(output string) ([]EditorInfo, error) {
 			continue
 		}
 		
-		parts := strings.Fields(line)
-		if len(parts) >= 2 {
-			editors = append(editors, EditorInfo{
-				Version: parts[0],
-				Path:    parts[len(parts)-1],
-			})
+		// Look for "installed at" pattern to extract path correctly
+		if strings.Contains(line, "installed at") {
+			parts := strings.Split(line, "installed at")
+			if len(parts) == 2 {
+				version := strings.TrimSpace(strings.Split(parts[0], ",")[0])
+				path := strings.TrimSpace(parts[1])
+				editors = append(editors, EditorInfo{
+					Version: version,
+					Path:    path,
+				})
+			}
+		} else {
+			// Fallback to original parsing for other formats
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				editors = append(editors, EditorInfo{
+					Version: parts[0],
+					Path:    parts[len(parts)-1],
+				})
+			}
 		}
 	}
 	

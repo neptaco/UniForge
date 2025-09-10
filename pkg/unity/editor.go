@@ -46,6 +46,10 @@ func (e *Editor) getExecutablePath(installPath string) string {
 	case "darwin":
 		return filepath.Join(installPath, "Unity.app", "Contents", "MacOS", "Unity")
 	case "windows":
+		// Unity Hub already returns the full path to Unity.exe, so just return it as-is
+		if filepath.Ext(installPath) == ".exe" {
+			return installPath
+		}
 		return filepath.Join(installPath, "Editor", "Unity.exe")
 	case "linux":
 		return filepath.Join(installPath, "Editor", "Unity")

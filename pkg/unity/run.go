@@ -3,6 +3,7 @@ package unity
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/neptaco/unity-cli/pkg/logger"
@@ -38,7 +39,13 @@ func (r *Runner) Run(config RunConfig) error {
 		return fmt.Errorf("failed to get Unity Editor path: %w", err)
 	}
 
-	args := r.buildArgs(config)
+	// Convert to absolute path to avoid issues with relative paths
+	absProjectPath, err := filepath.Abs(config.ProjectPath)
+	if err != nil {
+		absProjectPath = config.ProjectPath // fallback to original if abs fails
+	}
+
+	args := r.buildArgs(absProjectPath, config)
 	
 	cmd := exec.Command(editorPath, args...)
 	
@@ -47,7 +54,10 @@ func (r *Runner) Run(config RunConfig) error {
 
 	cmd.Stdout = log
 	cmd.Stderr = log
-	cmd.Dir = config.ProjectPath
+	
+	// Set working directory to parent of project directory
+	projectDir := filepath.Dir(absProjectPath)
+	cmd.Dir = projectDir
 
 	logrus.Infof("Running Unity with command: %s %s", editorPath, strings.Join(args, " "))
 	
@@ -62,9 +72,12 @@ func (r *Runner) Run(config RunConfig) error {
 	return nil
 }
 
-func (r *Runner) buildArgs(config RunConfig) []string {
+func (r *Runner) buildArgs(absProjectPath string, config RunConfig) []string {
+	// Use only the project directory name for -projectPath
+	projectName := filepath.Base(absProjectPath)
+	
 	args := []string{
-		"-projectPath", config.ProjectPath,
+		"-projectPath", projectName,
 	}
 
 	if config.BatchMode {

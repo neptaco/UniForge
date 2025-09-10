@@ -38,3 +38,5 @@ Thumbs.db
 
 # Config files (local)
 .unity-cli.yaml
+test-project/Library
+test-project/Temp
