@@ -1,4 +1,4 @@
-version: 2
+version: 1
 
 before:
   hooks:
@@ -34,7 +34,7 @@ checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -48,7 +48,6 @@ brews:
   - repository:
       owner: neptaco
       name: homebrew-tap
-    folder: Formula
     homepage: https://github.com/neptaco/unity-cli
     description: "Unity CI/CD command-line tool"
     license: "MIT"
