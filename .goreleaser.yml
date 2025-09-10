@@ -1,4 +1,4 @@
-version: 1
+version: 2
 
 before:
   hooks:
@@ -21,11 +21,7 @@ builds:
       - -s -w -X main.version={{.Version}}
 
 archives:
-  - format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        format: zip
+  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE*
       - README*
@@ -34,7 +30,7 @@ checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -44,14 +40,5 @@ changelog:
       - '^test:'
       - '^chore:'
 
-brews:
-  - repository:
-      owner: neptaco
-      name: homebrew-tap
-    homepage: https://github.com/neptaco/unity-cli
-    description: "Unity CI/CD command-line tool"
-    license: "MIT"
-    test: |
-      system "#{bin}/unity-cli", "--version"
-    install: |
-      bin.install "unity-cli"
+# Homebrew configuration removed for v2 compatibility
+# Consider using homebrew_casks or manual Homebrew formula creation
