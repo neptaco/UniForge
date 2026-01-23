@@ -17,10 +17,10 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "uniforge",
-	Short: "Unity CI/CD command-line tool",
-	Long: `Uniforge is a command-line tool for Unity CI/CD operations.
+	Short: "Command-line tool for Unity development",
+	Long: `UniForge is a command-line tool for Unity development.
 It provides functionality to manage Unity Editor installations,
-build Unity projects, and run Unity in batch mode for CI/CD pipelines.`,
+build Unity projects, and run Unity in batch mode.`,
 }
 
 func Execute(version string) {

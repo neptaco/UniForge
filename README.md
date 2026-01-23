@@ -1,6 +1,6 @@
-# Uniforge
+# UniForge
 
-Unity CI/CD command-line tool for managing Unity Editor installations and building Unity projects.
+Command-line tool for Unity development. Manage Unity Editor installations, build projects, and run Unity in batch mode.
 
 ## Features
 
