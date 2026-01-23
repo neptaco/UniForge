@@ -1,31 +1,34 @@
 package unity
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/neptaco/unity-cli/pkg/logger"
 	"github.com/sirupsen/logrus"
 )
 
+// RunConfig holds configuration for running Unity in batch mode
 type RunConfig struct {
 	ProjectPath    string
-	ExecuteMethods []string
-	BatchMode      bool
-	NoGraphics     bool
-	Quit           bool
+	ExtraArgs      []string // Arguments passed after --
 	LogFile        string
-	TestPlatform   string
-	TestResults    string
+	TimeoutSeconds int
+	CIMode         bool
+	ShowTimestamp  bool
 }
 
+// Runner handles Unity batch execution
 type Runner struct {
 	project *Project
 	editor  *Editor
 }
 
+// NewRunner creates a new Runner
 func NewRunner(project *Project) *Runner {
 	return &Runner{
 		project: project,
@@ -33,39 +36,52 @@ func NewRunner(project *Project) *Runner {
 	}
 }
 
+// Run executes Unity in batch mode with the specified configuration
 func (r *Runner) Run(config RunConfig) error {
 	editorPath, err := r.editor.GetPath()
 	if err != nil {
 		return fmt.Errorf("failed to get Unity Editor path: %w", err)
 	}
 
-	// Convert to absolute path to avoid issues with relative paths
 	absProjectPath, err := filepath.Abs(config.ProjectPath)
 	if err != nil {
-		absProjectPath = config.ProjectPath // fallback to original if abs fails
+		absProjectPath = config.ProjectPath
 	}
 
 	args := r.buildArgs(absProjectPath, config)
-	
-	cmd := exec.Command(editorPath, args...)
-	
-	log := logger.New(config.LogFile, false)
+
+	timeout := config.TimeoutSeconds
+	if timeout == 0 {
+		timeout = 3600 // Default 1 hour
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, editorPath, args...)
+
+	log := logger.NewWithOptions(config.LogFile,
+		logger.WithCIMode(config.CIMode),
+		logger.WithShowTime(config.ShowTimestamp),
+	)
 	defer log.Close()
 
 	cmd.Stdout = log
 	cmd.Stderr = log
-	
-	// Set working directory to parent of project directory
+
 	projectDir := filepath.Dir(absProjectPath)
 	cmd.Dir = projectDir
 
-	logrus.Infof("Running Unity with command: %s %s", editorPath, strings.Join(args, " "))
-	
+	logrus.Infof("Running Unity: %s %s", editorPath, strings.Join(args, " "))
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start Unity: %w", err)
 	}
 
 	if err := cmd.Wait(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("execution timeout after %d seconds", timeout)
+		}
 		return fmt.Errorf("Unity execution failed: %w", err)
 	}
 
@@ -73,23 +89,13 @@ func (r *Runner) Run(config RunConfig) error {
 }
 
 func (r *Runner) buildArgs(absProjectPath string, config RunConfig) []string {
-	// Use only the project directory name for -projectPath
 	projectName := filepath.Base(absProjectPath)
-	
+
 	args := []string{
 		"-projectPath", projectName,
-	}
-
-	if config.BatchMode {
-		args = append(args, "-batchmode")
-	}
-
-	if config.NoGraphics {
-		args = append(args, "-nographics")
-	}
-
-	if config.Quit {
-		args = append(args, "-quit")
+		"-batchmode",
+		"-nographics",
+		"-quit",
 	}
 
 	if config.LogFile != "" {
@@ -98,17 +104,9 @@ func (r *Runner) buildArgs(absProjectPath string, config RunConfig) []string {
 		args = append(args, "-logFile", "-")
 	}
 
-	for _, method := range config.ExecuteMethods {
-		args = append(args, "-executeMethod", method)
-	}
-
-	if config.TestPlatform != "" {
-		args = append(args, "-runTests")
-		args = append(args, "-testPlatform", config.TestPlatform)
-		
-		if config.TestResults != "" {
-			args = append(args, "-testResults", config.TestResults)
-		}
+	// Append extra arguments (passed after --)
+	if len(config.ExtraArgs) > 0 {
+		args = append(args, config.ExtraArgs...)
 	}
 
 	return args
