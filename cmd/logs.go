@@ -3,11 +3,14 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
-	"strings"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/neptaco/uniforge/pkg/logger"
 	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
@@ -119,62 +122,205 @@ func openInEditor(logPath string) error {
 func followLog(logPath string) error {
 	noColor := viper.GetBool("no-color") || os.Getenv("NO_COLOR") != ""
 
-	if logRaw || noColor {
-		// Use -F to follow file even if it gets recreated (e.g., when switching projects)
-		cmd := exec.Command("tail", "-F", logPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		fmt.Printf("Following %s (Ctrl+C to stop)\n\n", logPath)
-		return cmd.Run()
-	}
-
-	// Use custom tail with formatting
 	fmt.Printf("Following %s (Ctrl+C to stop)\n\n", logPath)
 
-	formatter := logger.NewFormatter(
-		logger.WithNoColor(false),
-		logger.WithHideStackTrace(!logFullTrace),
-		logger.WithHideAllStackTraces(!logTrace && !logFullTrace),
-	)
+	var formatter *logger.Formatter
+	if !logRaw && !noColor {
+		formatter = logger.NewFormatter(
+			logger.WithNoColor(false),
+			logger.WithHideStackTrace(!logFullTrace),
+			logger.WithHideAllStackTraces(!logTrace && !logFullTrace),
+		)
+	}
 
-	// Use -F to follow file even if it gets recreated (e.g., when switching projects)
-	cmd := exec.Command("tail", "-F", logPath)
-	stdout, err := cmd.StdoutPipe()
+	// Set up signal handler for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
+
+	// Set up file watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("failed to create file watcher: %w", err)
+	}
+	defer watcher.Close()
+
+	// Watch the directory (to detect file recreation)
+	dir := logPath[:len(logPath)-len("/"+logPath[len(logPath)-len("Editor.log"):])]
+	if idx := lastIndexOfPathSeparator(logPath); idx >= 0 {
+		dir = logPath[:idx]
+	}
+	if err := watcher.Add(dir); err != nil {
+		logrus.Debugf("Failed to watch directory, falling back to file-only watch: %v", err)
+	}
+
+	// Also watch the file itself
+	if err := watcher.Add(logPath); err != nil {
+		return fmt.Errorf("failed to watch log file: %w", err)
+	}
+
+	// Open file and seek to end
+	file, offset, err := openAndSeekToEnd(logPath)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
-	if err := cmd.Start(); err != nil {
-		return err
+	// Create a ticker for polling (as backup for platforms where fsnotify may not work perfectly)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sigChan:
+			fmt.Println("\nStopped following log.")
+			return nil
+
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return nil
+			}
+
+			// Handle file write or create (file recreation)
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+				// If file was recreated, reopen it
+				if event.Has(fsnotify.Create) && event.Name == logPath {
+					file.Close()
+					time.Sleep(100 * time.Millisecond) // Wait for file to be ready
+					file, offset, err = openAndSeekToEnd(logPath)
+					if err != nil {
+						logrus.Debugf("Failed to reopen file: %v", err)
+						continue
+					}
+					offset = 0 // Start from beginning of new file
+				}
+
+				offset, err = readNewLines(file, offset, formatter)
+				if err != nil {
+					logrus.Debugf("Error reading new lines: %v", err)
+				}
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+			logrus.Debugf("Watcher error: %v", err)
+
+		case <-ticker.C:
+			// Periodic poll as backup
+			offset, err = readNewLines(file, offset, formatter)
+			if err != nil {
+				// File might have been recreated
+				if _, statErr := os.Stat(logPath); statErr == nil {
+					file.Close()
+					file, offset, err = openAndSeekToEnd(logPath)
+					if err != nil {
+						logrus.Debugf("Failed to reopen file: %v", err)
+					}
+					offset = 0
+				}
+			}
+		}
+	}
+}
+
+// lastIndexOfPathSeparator returns the index of the last path separator in the path
+func lastIndexOfPathSeparator(path string) int {
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' || path[i] == '\\' {
+			return i
+		}
+	}
+	return -1
+}
+
+// openAndSeekToEnd opens a file and seeks to the end, returning the file and its size
+func openAndSeekToEnd(path string) (*os.File, int64, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	// Use bufio.Reader instead of Scanner to handle very long lines
-	reader := bufio.NewReader(stdout)
+	// Seek to end
+	offset, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
+		file.Close()
+		return nil, 0, fmt.Errorf("failed to seek to end: %w", err)
+	}
 
+	return file, offset, nil
+}
+
+// readNewLines reads new lines from the file starting at offset
+func readNewLines(file *os.File, offset int64, formatter *logger.Formatter) (int64, error) {
+	// Get current file size
+	info, err := file.Stat()
+	if err != nil {
+		return offset, err
+	}
+
+	// If file was truncated, start from beginning
+	if info.Size() < offset {
+		offset = 0
+	}
+
+	// If no new content, return
+	if info.Size() == offset {
+		return offset, nil
+	}
+
+	// Seek to last position
+	_, err = file.Seek(offset, io.SeekStart)
+	if err != nil {
+		return offset, err
+	}
+
+	// Read new content
+	reader := bufio.NewReader(file)
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			if err.Error() != "EOF" {
-				fmt.Fprintf(os.Stderr, "\n%sRead error: %v%s\n", logger.ColorRed, err, logger.ColorReset)
+			if err == io.EOF {
+				// Partial line, put it back by adjusting offset
+				break
 			}
-			break
+			return offset, err
 		}
 
-		// Remove trailing newline
-		line = strings.TrimSuffix(line, "\n")
+		// Update offset
+		offset += int64(len(line))
 
-		if formatter.ShouldShow(line) {
-			formatted := formatter.FormatLine(line)
-			if logTimestamp {
-				ts := time.Now().Format("15:04:05.000")
-				fmt.Printf("%s[%s]%s %s\n", logger.ColorGray, ts, logger.ColorReset, formatted)
-			} else {
-				fmt.Println(formatted)
+		// Remove trailing newline/carriage return
+		line = trimLineEnding(line)
+
+		// Output the line
+		if formatter != nil {
+			if formatter.ShouldShow(line) {
+				formatted := formatter.FormatLine(line)
+				if logTimestamp {
+					ts := time.Now().Format("15:04:05.000")
+					fmt.Printf("%s[%s]%s %s\n", logger.ColorGray, ts, logger.ColorReset, formatted)
+				} else {
+					fmt.Println(formatted)
+				}
 			}
+		} else {
+			// Raw output
+			fmt.Println(line)
 		}
 	}
 
-	return cmd.Wait()
+	return offset, nil
+}
+
+// trimLineEnding removes \n and \r\n from the end of a line
+func trimLineEnding(line string) string {
+	line = line[:len(line)-1] // Remove \n
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		line = line[:len(line)-1] // Remove \r if present (Windows)
+	}
+	return line
 }
 
 func showLog(logPath string, lines int) error {
