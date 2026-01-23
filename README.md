@@ -124,8 +124,6 @@ no-color: false
 
 ### GitHub Actions
 
-#### Linux/macOS
-
 ```yaml
 name: Build Unity Project
 
@@ -136,87 +134,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Unity CLI
-        run: |
-          curl -L https://github.com/neptaco/uniforge/releases/latest/download/uniforge-linux-amd64 -o uniforge
-          chmod +x uniforge
-          sudo mv uniforge /usr/local/bin/
-      
+
+      - uses: neptaco/setup-uniforge@v1
+
       - name: Install Unity
         run: uniforge editor install --from-project . --modules android
-      
+
       - name: Run Tests
-        run: |
-          uniforge run \
-            --project . \
-            --execute-method CI.TestRunner.RunTests \
-            --test-results ./test-results.xml \
-            --quit
-      
-      - name: Build Android
-        run: |
-          uniforge run -p . --ci -- \
-            -executeMethod CI.Builder.BuildAndroid
+        run: uniforge run -p . --ci -- -executeMethod CI.TestRunner.RunTests
+
+      - name: Build
+        run: uniforge run -p . --ci -- -executeMethod CI.Builder.Build
 ```
 
-#### Windows
-
-```yaml
-name: Build Unity Project (Windows)
-
-on: [push]
-
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Unity CLI (Windows)
-        run: |
-          # Download Windows binary
-          $url = "https://github.com/neptaco/uniforge/releases/latest/download/uniforge_windows_amd64.zip"
-          $output = "uniforge.zip"
-          Invoke-WebRequest -Uri $url -OutFile $output
-          
-          # Extract and install
-          Expand-Archive -Path $output -DestinationPath "."
-          Move-Item "uniforge_windows_amd64/uniforge.exe" "uniforge.exe"
-          Remove-Item $output -Force
-          Remove-Item "uniforge_windows_amd64" -Recurse -Force
-          
-          # Add to PATH
-          $env:PATH = "$env:PATH;$pwd"
-      
-      - name: Install Unity
-        run: |
-          .\uniforge.exe editor install --from-project . --modules windows
-      
-      - name: Run Tests
-        run: |
-          .\uniforge.exe run `
-            --project . `
-            --execute-method CI.TestRunner.RunTests `
-            --test-results .\test-results.xml `
-            --quit
-      
-      - name: Build Windows
-        run: |
-          .\uniforge.exe run -p . --ci -- `
-            -executeMethod CI.Builder.BuildWindows
-```
-
-### GitLab CI
-
-```yaml
-build:
-  image: ubuntu:latest
-  script:
-    - curl -L https://github.com/neptaco/uniforge/releases/latest/download/uniforge-linux-amd64 -o uniforge
-    - chmod +x uniforge
-    - ./uniforge run -p . --ci -- -executeMethod CI.Builder.BuildAndroid
-```
+Works on `ubuntu-latest`, `macos-latest`, and `windows-latest`.
 
 ## Development
 
