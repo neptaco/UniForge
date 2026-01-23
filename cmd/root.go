@@ -25,6 +25,7 @@ build Unity projects, and run Unity in batch mode for CI/CD pipelines.`,
 
 func Execute(version string) {
 	Version = version
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -38,7 +39,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
 
-	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 
 	if err := viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
