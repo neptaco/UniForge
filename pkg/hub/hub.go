@@ -489,10 +489,14 @@ func (c *Client) parseEditorsList(output string) ([]EditorInfo, error) {
 		if strings.Contains(line, "installed at") {
 			parts := strings.Split(line, "installed at")
 			if len(parts) == 2 {
-				version := strings.TrimSpace(strings.Split(parts[0], ",")[0])
+				versionPart := strings.TrimSpace(strings.Split(parts[0], ",")[0])
+				// Remove architecture info like "(Apple シリコン)" or "(Apple Silicon)"
+				if idx := strings.Index(versionPart, "("); idx > 0 {
+					versionPart = strings.TrimSpace(versionPart[:idx])
+				}
 				path := strings.TrimSpace(parts[1])
 				editors = append(editors, EditorInfo{
-					Version: version,
+					Version: versionPart,
 					Path:    path,
 				})
 			}

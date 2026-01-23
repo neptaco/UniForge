@@ -24,6 +24,7 @@ var editorInstallCmd = &cobra.Command{
 	Short: "Install Unity Editor version",
 	Long: `Install a specific Unity Editor version with optional modules.
 You can specify a version directly or let it detect from a Unity project.
+If no version is specified, it will try to detect from the current directory.
 If the editor is already installed, it will skip the installation unless --force is specified.`,
 	RunE: runInstall,
 }
@@ -43,26 +44,33 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	var version string
 	var changeset string
 
-	if installFromProject != "" {
-		logrus.Debugf("Detecting Unity version from project: %s", installFromProject)
-		
-		project, err := unity.LoadProject(installFromProject)
-		if err != nil {
-			return fmt.Errorf("failed to load project: %w", err)
+	if installVersion != "" {
+		version = installVersion
+	} else {
+		// Try to detect from project (explicit path or current directory)
+		projectPath := installFromProject
+		if projectPath == "" {
+			projectPath = "."
 		}
-		
+
+		logrus.Debugf("Detecting Unity version from project: %s", projectPath)
+
+		project, err := unity.LoadProject(projectPath)
+		if err != nil {
+			if installFromProject != "" {
+				return fmt.Errorf("failed to load project: %w", err)
+			}
+			return fmt.Errorf("no version specified and current directory is not a Unity project: %w", err)
+		}
+
 		version = project.UnityVersion
 		logrus.Infof("Detected Unity version: %s", version)
-		
+
 		// Use changeset from project if not specified via flag
 		if installChangeset == "" && project.Changeset != "" {
 			changeset = project.Changeset
 			logrus.Infof("Detected changeset: %s", changeset)
 		}
-	} else if installVersion != "" {
-		version = installVersion
-	} else {
-		return fmt.Errorf("either --version or --from-project must be specified")
 	}
 	
 	// Override with flag if provided

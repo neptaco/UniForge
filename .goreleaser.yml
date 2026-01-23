@@ -39,6 +39,15 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^chore:'
+      - '^ci:'
+      - '^build:'
+      - '^refactor:'
+      - '^style:'
+      - '^perf:'
+    include:
+      - '^feat:'
+      - '^fix:'
+      - '^BREAKING CHANGE:'
 
 # Homebrew configuration removed for v2 compatibility
 # Consider using homebrew_casks or manual Homebrew formula creation
