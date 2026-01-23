@@ -7,7 +7,7 @@
 go install
 
 # または、任意の場所から
-go install github.com/neptaco/unity-cli@latest
+go install github.com/neptaco/uniforge@latest
 ```
 
 これにより `$GOPATH/bin` または `$HOME/go/bin` にインストールされます。
@@ -25,14 +25,14 @@ task install
 # ビルド
 task build
 # または
-go build -o unity-cli main.go
+go build -o uniforge main.go
 
 # /usr/local/bin にコピー（macOS/Linux）
-sudo cp dist/unity-cli /usr/local/bin/
+sudo cp dist/uniforge /usr/local/bin/
 
 # または、ホームディレクトリのbinに配置
 mkdir -p ~/bin
-cp dist/unity-cli ~/bin/
+cp dist/uniforge ~/bin/
 # ~/.zshrc または ~/.bashrc に以下を追加
 echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
@@ -45,7 +45,7 @@ source ~/.zshrc
 task build
 
 # エイリアスを設定（~/.zshrc または ~/.bashrc に追加）
-echo "alias unity-cli='$(pwd)/dist/unity-cli'" >> ~/.zshrc
+echo "alias uniforge='$(pwd)/dist/uniforge'" >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -56,37 +56,37 @@ source ~/.zshrc
 task build
 
 # シンボリックリンクを作成
-sudo ln -sf $(pwd)/dist/unity-cli /usr/local/bin/unity-cli
+sudo ln -sf $(pwd)/dist/uniforge /usr/local/bin/uniforge
 ```
 
 ## インストール確認
 
 ```bash
 # インストールされたか確認
-which unity-cli
+which uniforge
 
 # バージョン確認（まだ未実装のため、ヘルプを表示）
-unity-cli --help
+uniforge --help
 
 # 動作確認
-unity-cli editor list
+uniforge editor list
 ```
 
 ## アンインストール
 
 ### go install でインストールした場合
 ```bash
-rm $(go env GOPATH)/bin/unity-cli
+rm $(go env GOPATH)/bin/uniforge
 ```
 
 ### /usr/local/bin にインストールした場合
 ```bash
-sudo rm /usr/local/bin/unity-cli
+sudo rm /usr/local/bin/uniforge
 ```
 
 ### シンボリックリンクの場合
 ```bash
-sudo rm /usr/local/bin/unity-cli
+sudo rm /usr/local/bin/uniforge
 ```
 
 ## 開発中の便利な使い方
@@ -140,8 +140,8 @@ echo $PATH | tr ':' '\n' | grep -E "(go/bin|local/bin)"
 
 2. インストール場所を確認
 ```bash
-ls -la $(go env GOPATH)/bin/unity-cli
-ls -la /usr/local/bin/unity-cli
+ls -la $(go env GOPATH)/bin/uniforge
+ls -la /usr/local/bin/uniforge
 ```
 
 3. PATHを更新
@@ -153,8 +153,8 @@ export PATH="$HOME/go/bin:$PATH"
 
 ```bash
 # 実行権限を付与
-chmod +x dist/unity-cli
+chmod +x dist/uniforge
 
 # /usr/local/bin への書き込み権限
-sudo cp dist/unity-cli /usr/local/bin/
+sudo cp dist/uniforge /usr/local/bin/
 ```

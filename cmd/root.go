@@ -16,9 +16,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "unity-cli",
+	Use:   "uniforge",
 	Short: "Unity CI/CD command-line tool",
-	Long: `Unity CLI is a command-line tool for Unity CI/CD operations.
+	Long: `Uniforge is a command-line tool for Unity CI/CD operations.
 It provides functionality to manage Unity Editor installations,
 build Unity projects, and run Unity in batch mode for CI/CD pipelines.`,
 }
@@ -34,7 +34,7 @@ func Execute(version string) {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.unity-cli.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.uniforge.yaml)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
 
@@ -58,10 +58,10 @@ func initConfig() {
 
 		viper.AddConfigPath(home)
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".unity-cli")
+		viper.SetConfigName(".uniforge")
 	}
 
-	viper.SetEnvPrefix("UNITY_CLI")
+	viper.SetEnvPrefix("UNIFORGE")
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {

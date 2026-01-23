@@ -18,6 +18,6 @@ EOF
 echo "Test project created at: $TEST_DIR"
 echo ""
 echo "You can now test the CLI with:"
-echo "  ./dist/unity-cli editor list"
-echo "  ./dist/unity-cli build --project $TEST_DIR --target ios --output ./Build"
+echo "  ./dist/uniforge editor list"
+echo "  ./dist/uniforge build --project $TEST_DIR --target ios --output ./Build"
 echo ""

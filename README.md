@@ -1,4 +1,4 @@
-# Unity CLI
+# Uniforge
 
 Unity CI/CD command-line tool for managing Unity Editor installations and building Unity projects.
 
@@ -16,26 +16,26 @@ Unity CI/CD command-line tool for managing Unity Editor installations and buildi
 ### Using Homebrew (macOS)
 
 ```bash
-brew tap neptaco/unity-cli
-brew install unity-cli
+brew tap neptaco/uniforge
+brew install uniforge
 ```
 
 ### Using Scoop (Windows)
 
 ```bash
 scoop bucket add neptaco https://github.com/neptaco/scoop-bucket
-scoop install unity-cli
+scoop install uniforge
 ```
 
 ### Download Binary
 
-Download the latest release from [GitHub Releases](https://github.com/neptaco/unity-cli/releases).
+Download the latest release from [GitHub Releases](https://github.com/neptaco/uniforge/releases).
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/neptaco/unity-cli.git
-cd unity-cli
+git clone https://github.com/neptaco/uniforge.git
+cd uniforge
 task build
 ```
 
@@ -58,26 +58,26 @@ task build
 
 ```bash
 # List installed Unity Editors
-unity-cli editor list
+uniforge editor list
 
 # Install specific version
-unity-cli editor install --version 2022.3.10f1
+uniforge editor install --version 2022.3.10f1
 
 # Install with modules
-unity-cli editor install --version 2022.3.10f1 --modules ios,android
+uniforge editor install --version 2022.3.10f1 --modules ios,android
 
 # Install from project (auto-detect version)
-unity-cli editor install --from-project ./MyUnityProject
+uniforge editor install --from-project ./MyUnityProject
 ```
 
 ### Build Unity Project
 
 ```bash
 # Basic build
-unity-cli build --project ./MyProject --target ios --output ./Build/iOS
+uniforge build --project ./MyProject --target ios --output ./Build/iOS
 
 # Build with custom method
-unity-cli build \
+uniforge build \
   --project ./MyProject \
   --target android \
   --method MyCompany.Builder.BuildAndroid \
@@ -85,7 +85,7 @@ unity-cli build \
   --log-file ./build.log
 
 # CI mode with fail on warning
-unity-cli build \
+uniforge build \
   --project ./MyProject \
   --target windows \
   --ci-mode \
@@ -96,14 +96,14 @@ unity-cli build \
 
 ```bash
 # Run tests
-unity-cli run \
+uniforge run \
   --project ./MyProject \
   --execute-method TestRunner.RunAllTests \
   --test-results ./test-results.xml \
   --quit
 
 # Run multiple methods
-unity-cli run \
+uniforge run \
   --project ./MyProject \
   --execute-method "Setup.Initialize;Build.Execute;Cleanup.Finish" \
   --quit
@@ -114,11 +114,11 @@ unity-cli run \
 ### Environment Variables
 
 ```bash
-UNITY_CLI_HUB_PATH        # Path to Unity Hub executable
+UNIFORGE_HUB_PATH        # Path to Unity Hub executable
 UNITY_HUB_INSTALL_PATH    # Custom Unity Editor installation directory (speeds up detection)
-UNITY_CLI_LOG_LEVEL       # Log level (debug, info, warn, error)
-UNITY_CLI_TIMEOUT         # Default timeout in seconds
-UNITY_CLI_NO_COLOR        # Disable colored output
+UNIFORGE_LOG_LEVEL       # Log level (debug, info, warn, error)
+UNIFORGE_TIMEOUT         # Default timeout in seconds
+UNIFORGE_NO_COLOR        # Disable colored output
 ```
 
 #### Performance Optimization
@@ -130,12 +130,12 @@ If you have Unity Editors installed in a custom location, set `UNITY_HUB_INSTALL
 export UNITY_HUB_INSTALL_PATH=/Volumes/ExternalSSD/Applications/Unity/Hub/Editor
 
 # This will make editor detection instant (< 0.04 seconds)
-unity-cli editor install --version 2022.3.60f1
+uniforge editor install --version 2022.3.60f1
 ```
 
 ### Configuration File
 
-Create `.unity-cli.yaml` in your home directory:
+Create `.uniforge.yaml` in your home directory:
 
 ```yaml
 log-level: info
@@ -161,16 +161,16 @@ jobs:
       
       - name: Setup Unity CLI
         run: |
-          curl -L https://github.com/neptaco/unity-cli/releases/latest/download/unity-cli-linux-amd64 -o unity-cli
-          chmod +x unity-cli
-          sudo mv unity-cli /usr/local/bin/
+          curl -L https://github.com/neptaco/uniforge/releases/latest/download/uniforge-linux-amd64 -o uniforge
+          chmod +x uniforge
+          sudo mv uniforge /usr/local/bin/
       
       - name: Install Unity
-        run: unity-cli editor install --from-project . --modules android
+        run: uniforge editor install --from-project . --modules android
       
       - name: Run Tests
         run: |
-          unity-cli run \
+          uniforge run \
             --project . \
             --execute-method CI.TestRunner.RunTests \
             --test-results ./test-results.xml \
@@ -178,7 +178,7 @@ jobs:
       
       - name: Build Android
         run: |
-          unity-cli build \
+          uniforge build \
             --project . \
             --target android \
             --method CI.Builder.BuildAndroid \
@@ -202,26 +202,26 @@ jobs:
       - name: Setup Unity CLI (Windows)
         run: |
           # Download Windows binary
-          $url = "https://github.com/neptaco/unity-cli/releases/latest/download/unity-cli_windows_amd64.zip"
-          $output = "unity-cli.zip"
+          $url = "https://github.com/neptaco/uniforge/releases/latest/download/uniforge_windows_amd64.zip"
+          $output = "uniforge.zip"
           Invoke-WebRequest -Uri $url -OutFile $output
           
           # Extract and install
           Expand-Archive -Path $output -DestinationPath "."
-          Move-Item "unity-cli_windows_amd64/unity-cli.exe" "unity-cli.exe"
+          Move-Item "uniforge_windows_amd64/uniforge.exe" "uniforge.exe"
           Remove-Item $output -Force
-          Remove-Item "unity-cli_windows_amd64" -Recurse -Force
+          Remove-Item "uniforge_windows_amd64" -Recurse -Force
           
           # Add to PATH
           $env:PATH = "$env:PATH;$pwd"
       
       - name: Install Unity
         run: |
-          .\unity-cli.exe editor install --from-project . --modules windows
+          .\uniforge.exe editor install --from-project . --modules windows
       
       - name: Run Tests
         run: |
-          .\unity-cli.exe run `
+          .\uniforge.exe run `
             --project . `
             --execute-method CI.TestRunner.RunTests `
             --test-results .\test-results.xml `
@@ -229,7 +229,7 @@ jobs:
       
       - name: Build Windows
         run: |
-          .\unity-cli.exe build `
+          .\uniforge.exe build `
             --project . `
             --target windows `
             --method CI.Builder.BuildWindows `
@@ -243,9 +243,9 @@ jobs:
 build:
   image: ubuntu:latest
   script:
-    - curl -L https://github.com/neptaco/unity-cli/releases/latest/download/unity-cli-linux-amd64 -o unity-cli
-    - chmod +x unity-cli
-    - ./unity-cli build --project . --target android --ci-mode
+    - curl -L https://github.com/neptaco/uniforge/releases/latest/download/uniforge-linux-amd64 -o uniforge
+    - chmod +x uniforge
+    - ./uniforge build --project . --target android --ci-mode
 ```
 
 ## Build Targets
@@ -284,7 +284,7 @@ task lint
 ### Project Structure
 
 ```
-unity-cli/
+uniforge/
 ├── cmd/           # CLI commands
 ├── pkg/           # Core packages
 │   ├── unity/     # Unity-related functionality
@@ -308,7 +308,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 #### Unity Hub Path Issues
 If Unity Hub is not found automatically:
 ```powershell
-$env:UNITY_CLI_HUB_PATH = "C:\Program Files\Unity\Hub\Unity Hub.exe"
+$env:UNIFORGE_HUB_PATH = "C:\Program Files\Unity\Hub\Unity Hub.exe"
 ```
 
 #### Long Path Support
@@ -333,4 +333,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Support
 
-For issues and feature requests, please use the [GitHub Issues](https://github.com/neptaco/unity-cli/issues) page.
+For issues and feature requests, please use the [GitHub Issues](https://github.com/neptaco/uniforge/issues) page.

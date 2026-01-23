@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/neptaco/unity-cli/pkg/unity"
+	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -27,19 +27,19 @@ builds, custom methods, asset processing, etc.
 
 Examples:
   # Run a custom method
-  unity-cli run -- -executeMethod MyScript.DoSomething
+  uniforge run -- -executeMethod MyScript.DoSomething
 
   # Build for Windows
-  unity-cli run -- -buildTarget Win64 -buildWindows64Player ./Build/Game.exe
+  uniforge run -- -buildTarget Win64 -buildWindows64Player ./Build/Game.exe
 
   # Run multiple methods
-  unity-cli run -- -executeMethod BuildScript.PreBuild -executeMethod BuildScript.Build
+  uniforge run -- -executeMethod BuildScript.PreBuild -executeMethod BuildScript.Build
 
   # Custom asset processing
-  unity-cli run -- -executeMethod AssetProcessor.ProcessAll
+  uniforge run -- -executeMethod AssetProcessor.ProcessAll
 
   # With project path and timeout
-  unity-cli run -p /path/to/project --timeout 3600 -- -executeMethod LongProcess.Run`,
+  uniforge run -p /path/to/project --timeout 3600 -- -executeMethod LongProcess.Run`,
 	RunE: runRun,
 }
 

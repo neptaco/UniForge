@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/neptaco/unity-cli/pkg/hub"
+	"github.com/neptaco/uniforge/pkg/hub"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -82,7 +82,7 @@ func runAvailable(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\nTo install a specific version, use:")
-	fmt.Println("  unity-cli editor install --version <version>")
+	fmt.Println("  uniforge editor install --version <version>")
 
 	return nil
 }

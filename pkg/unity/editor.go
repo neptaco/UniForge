@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/neptaco/unity-cli/pkg/hub"
+	"github.com/neptaco/uniforge/pkg/hub"
 	"github.com/sirupsen/logrus"
 )
 
@@ -43,7 +43,7 @@ func (e *Editor) GetPath() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Unity Editor %s not found. Please install it using: unity-cli install --version %s", e.Version, e.Version)
+	return "", fmt.Errorf("Unity Editor %s not found. Please install it using: uniforge install --version %s", e.Version, e.Version)
 }
 
 func (e *Editor) getExecutablePath(installPath string) string {

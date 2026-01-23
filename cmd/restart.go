@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/neptaco/unity-cli/pkg/unity"
+	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -21,10 +21,10 @@ This closes the running Editor and opens it again.
 
 Examples:
   # Restart Unity Editor for current project
-  unity-cli restart
+  uniforge restart
 
   # Restart with specific project path
-  unity-cli restart --project /path/to/project`,
+  uniforge restart --project /path/to/project`,
 	RunE: runRestart,
 }
 

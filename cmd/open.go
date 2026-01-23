@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/neptaco/unity-cli/pkg/unity"
+	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -20,10 +20,10 @@ The Editor version is automatically detected from the project's ProjectVersion.t
 
 Examples:
   # Open current directory as Unity project
-  unity-cli open
+  uniforge open
 
   # Open a specific project
-  unity-cli open --project /path/to/project`,
+  uniforge open --project /path/to/project`,
 	RunE: runOpen,
 }
 

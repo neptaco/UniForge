@@ -342,7 +342,7 @@ type installPathCacheData struct {
 // Get cache file path
 func (c *Client) getCacheFilePath() string {
 	tmpDir := os.TempDir()
-	return filepath.Join(tmpDir, "unity-cli-install-path.json")
+	return filepath.Join(tmpDir, "uniforge-install-path.json")
 }
 
 // Load install path from cache file
@@ -541,7 +541,7 @@ func (c *Client) mapModules(modules []string) []string {
 }
 
 func findUnityHub() string {
-	envPath := os.Getenv("UNITY_CLI_HUB_PATH")
+	envPath := os.Getenv("UNIFORGE_HUB_PATH")
 	if envPath != "" && fileExists(envPath) {
 		return envPath
 	}
@@ -559,7 +559,7 @@ func findUnityHub() string {
 		return pathCmd
 	}
 
-	logrus.Warn("Unity Hub not found. Please install Unity Hub or set UNITY_CLI_HUB_PATH environment variable")
+	logrus.Warn("Unity Hub not found. Please install Unity Hub or set UNIFORGE_HUB_PATH environment variable")
 	return ""
 }
 

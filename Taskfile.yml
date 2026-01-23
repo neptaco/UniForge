@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  BINARY_NAME: unity-cli
+  BINARY_NAME: uniforge
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
   LDFLAGS: -X main.version={{.VERSION}}

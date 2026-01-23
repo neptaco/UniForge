@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/neptaco/unity-cli/pkg/unity"
+	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -28,19 +28,19 @@ Supports both EditMode and PlayMode tests.
 
 Examples:
   # Run all EditMode tests
-  unity-cli test --platform editmode
+  uniforge test --platform editmode
 
   # Run all PlayMode tests
-  unity-cli test --platform playmode
+  uniforge test --platform playmode
 
   # Run tests with filter
-  unity-cli test --platform editmode --filter MyTestClass
+  uniforge test --platform editmode --filter MyTestClass
 
   # Save test results to file
-  unity-cli test --platform editmode --results ./test-results.xml
+  uniforge test --platform editmode --results ./test-results.xml
 
   # CI mode with custom timeout
-  unity-cli test --platform editmode --ci --timeout 1800`,
+  uniforge test --platform editmode --ci --timeout 1800`,
 	RunE: runTest,
 }
 

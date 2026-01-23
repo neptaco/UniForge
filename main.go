@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/neptaco/unity-cli/cmd"
+	"github.com/neptaco/uniforge/cmd"
 )
 
 var version = "dev"

@@ -17,7 +17,7 @@ vendor/
 
 # Build output
 dist/
-unity-cli
+uniforge
 
 # IDE
 .idea/
@@ -37,6 +37,6 @@ Thumbs.db
 .claude/tmp/
 
 # Config files (local)
-.unity-cli.yaml
+.uniforge.yaml
 test-project/Library
 test-project/Temp

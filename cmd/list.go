@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/neptaco/unity-cli/pkg/hub"
+	"github.com/neptaco/uniforge/pkg/hub"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

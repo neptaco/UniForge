@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/neptaco/unity-cli/pkg/unity"
+	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -21,13 +21,13 @@ By default, sends SIGTERM for graceful shutdown. Use --force for immediate termi
 
 Examples:
   # Close Unity Editor for current project
-  unity-cli close
+  uniforge close
 
   # Close with specific project path
-  unity-cli close --project /path/to/project
+  uniforge close --project /path/to/project
 
   # Force close (SIGKILL)
-  unity-cli close --force`,
+  uniforge close --force`,
 	RunE: runClose,
 }
 

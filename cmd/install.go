@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/neptaco/unity-cli/pkg/hub"
-	"github.com/neptaco/unity-cli/pkg/unity"
+	"github.com/neptaco/uniforge/pkg/hub"
+	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/neptaco/unity-cli/pkg/logger"
-	"github.com/neptaco/unity-cli/pkg/unity"
+	"github.com/neptaco/uniforge/pkg/logger"
+	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -42,28 +42,28 @@ Log lines are colorized:
 
 Examples:
   # Show last 100 lines (default)
-  unity-cli logs
+  uniforge logs
 
   # Show last 500 lines
-  unity-cli logs -n 500
+  uniforge logs -n 500
 
   # Follow log in real-time (like tail -f)
-  unity-cli logs -f
+  uniforge logs -f
 
   # Follow with timestamps
-  unity-cli logs -f -t
+  uniforge logs -f -t
 
   # Show raw output without colors
-  unity-cli logs --raw
+  uniforge logs --raw
 
   # Show project stack traces (Assets/, Packages/)
-  unity-cli logs --trace
+  uniforge logs --trace
 
   # Show full stack traces (including Unity internals)
-  unity-cli logs --full-trace
+  uniforge logs --full-trace
 
   # Open in text editor
-  unity-cli logs --editor`,
+  uniforge logs --editor`,
 	RunE: runLog,
 }
 

@@ -1,4 +1,4 @@
-module github.com/neptaco/unity-cli
+module github.com/neptaco/uniforge
 
 go 1.24
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/neptaco/unity-cli/pkg/logger"
+	"github.com/neptaco/uniforge/pkg/logger"
 	"github.com/sirupsen/logrus"
 )
 

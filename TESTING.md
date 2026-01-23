@@ -7,7 +7,7 @@
 task build
 
 # または直接ビルド
-go build -o dist/unity-cli main.go
+go build -o dist/uniforge main.go
 ```
 
 ## 2. テスト用プロジェクトのセットアップ
@@ -23,27 +23,27 @@ go build -o dist/unity-cli main.go
 
 ```bash
 # インストール済みのUnity Editorを確認
-./dist/unity-cli editor list
+./dist/uniforge editor list
 
 # Unity Editorのインストール（Unity Hubが必要）
-./dist/unity-cli editor install --version 2022.3.10f1
+./dist/uniforge editor install --version 2022.3.10f1
 
 # プロジェクトから自動検出してインストール
-./dist/unity-cli editor install --from-project ./test-project
+./dist/uniforge editor install --from-project ./test-project
 ```
 
 ### ビルドコマンド（ドライラン）
 
 ```bash
 # 実際のUnityプロジェクトがある場合
-./dist/unity-cli build \
+./dist/uniforge build \
   --project /path/to/your/unity/project \
   --target ios \
   --output ./Build/iOS \
   --log-file ./build.log
 
 # カスタムビルドメソッドを使用
-./dist/unity-cli build \
+./dist/uniforge build \
   --project ./test-project \
   --target android \
   --method MyCompany.Builder.BuildAndroid \
@@ -54,13 +54,13 @@ go build -o dist/unity-cli main.go
 
 ```bash
 # Unity Editorでメソッドを実行
-./dist/unity-cli run \
+./dist/uniforge run \
   --project ./test-project \
   --execute-method TestRunner.RunTests \
   --quit
 
 # バッチモードを無効にして対話的に実行
-./dist/unity-cli run \
+./dist/uniforge run \
   --project ./test-project \
   --batch-mode=false \
   --no-graphics=false
@@ -92,57 +92,57 @@ go test -race ./...
 
 ```bash
 # デバッグログを有効にして実行
-./dist/unity-cli --log-level debug editor list
+./dist/uniforge --log-level debug editor list
 
 # 環境変数でログレベルを設定
-UNITY_CLI_LOG_LEVEL=debug ./dist/unity-cli build --project ./test-project --target ios
+UNIFORGE_LOG_LEVEL=debug ./dist/uniforge build --project ./test-project --target ios
 
 # カラー出力を無効化
-./dist/unity-cli --no-color editor list
+./dist/uniforge --no-color editor list
 ```
 
 ## 6. 設定ファイルのテスト
 
 ```bash
 # 設定ファイルを作成
-cat > ~/.unity-cli.yaml << EOF
+cat > ~/.uniforge.yaml << EOF
 log-level: debug
 no-color: false
 EOF
 
 # 設定ファイルを使用して実行
-./dist/unity-cli editor list
+./dist/uniforge editor list
 
 # 別の設定ファイルを指定
-./dist/unity-cli --config ./my-config.yaml editor list
+./dist/uniforge --config ./my-config.yaml editor list
 ```
 
 ## 7. 環境変数のテスト
 
 ```bash
 # Unity Hub パスを指定
-UNITY_CLI_HUB_PATH="/Applications/Unity Hub.app/Contents/MacOS/Unity Hub" \
-  ./dist/unity-cli editor list
+UNIFORGE_HUB_PATH="/Applications/Unity Hub.app/Contents/MacOS/Unity Hub" \
+  ./dist/uniforge editor list
 
 # ログレベルを環境変数で設定
-UNITY_CLI_LOG_LEVEL=debug ./dist/unity-cli editor list
+UNIFORGE_LOG_LEVEL=debug ./dist/uniforge editor list
 
 # タイムアウトを設定（秒）
-UNITY_CLI_TIMEOUT=1800 ./dist/unity-cli build --project ./test-project --target android
+UNIFORGE_TIMEOUT=1800 ./dist/uniforge build --project ./test-project --target android
 ```
 
 ## 8. CI/CDモードのテスト
 
 ```bash
 # CI向け出力フォーマットでビルド
-./dist/unity-cli build \
+./dist/uniforge build \
   --project ./test-project \
   --target windows \
   --ci-mode \
   --fail-on-warning
 
 # GitHub Actions形式の出力を確認
-./dist/unity-cli build \
+./dist/uniforge build \
   --project ./test-project \
   --target ios \
   --ci-mode \
@@ -153,26 +153,26 @@ UNITY_CLI_TIMEOUT=1800 ./dist/unity-cli build --project ./test-project --target 
 
 ```bash
 # 存在しないプロジェクト
-./dist/unity-cli build --project ./non-existent --target ios
+./dist/uniforge build --project ./non-existent --target ios
 
 # 無効なバージョン
-./dist/unity-cli editor install --version invalid-version
+./dist/uniforge editor install --version invalid-version
 
 # Unity Hubが見つからない場合
-UNITY_CLI_HUB_PATH="/invalid/path" ./dist/unity-cli editor list
+UNIFORGE_HUB_PATH="/invalid/path" ./dist/uniforge editor list
 ```
 
 ## 10. パフォーマンステスト
 
 ```bash
 # ビルド時間の計測
-time ./dist/unity-cli build --project ./test-project --target android
+time ./dist/uniforge build --project ./test-project --target android
 
 # メモリ使用量の確認（macOS）
-/usr/bin/time -l ./dist/unity-cli editor list
+/usr/bin/time -l ./dist/uniforge editor list
 
 # メモリ使用量の確認（Linux）
-/usr/bin/time -v ./dist/unity-cli editor list
+/usr/bin/time -v ./dist/uniforge editor list
 ```
 
 ## トラブルシューティング
@@ -184,14 +184,14 @@ time ./dist/unity-cli build --project ./test-project --target android
 ls -la "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub"
 
 # 環境変数で指定
-export UNITY_CLI_HUB_PATH="/Applications/Unity Hub.app/Contents/MacOS/Unity Hub"
+export UNIFORGE_HUB_PATH="/Applications/Unity Hub.app/Contents/MacOS/Unity Hub"
 ```
 
 ### ビルドエラーの詳細確認
 
 ```bash
 # 詳細ログでビルド
-./dist/unity-cli --log-level debug build \
+./dist/uniforge --log-level debug build \
   --project ./test-project \
   --target ios \
   --log-file ./detailed.log
