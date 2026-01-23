@@ -28,13 +28,18 @@ const (
 	LogLevelNoise
 )
 
+// Default max line length before truncation
+const DefaultMaxLineLength = 500
+
 // Formatter handles Unity log formatting with colors and filtering
 type Formatter struct {
-	noColor          bool
-	hideStackTrace   bool
-	projectPaths     []string // Paths to keep in stack traces (e.g., "Assets/")
-	inStackTrace     bool
-	stackTraceBuffer []string
+	noColor            bool
+	hideStackTrace     bool // Hide non-project stack traces
+	hideAllStackTraces bool // Hide all stack traces completely
+	maxLineLength      int  // Max line length before truncation (0 = no limit)
+	projectPaths       []string // Paths to keep in stack traces (e.g., "Assets/")
+	inStackTrace       bool
+	stackTraceBuffer   []string
 }
 
 // FormatterOption configures a Formatter
@@ -54,6 +59,20 @@ func WithHideStackTrace(hide bool) FormatterOption {
 	}
 }
 
+// WithHideAllStackTraces hides all stack traces completely
+func WithHideAllStackTraces(hide bool) FormatterOption {
+	return func(f *Formatter) {
+		f.hideAllStackTraces = hide
+	}
+}
+
+// WithMaxLineLength sets the maximum line length before truncation
+func WithMaxLineLength(length int) FormatterOption {
+	return func(f *Formatter) {
+		f.maxLineLength = length
+	}
+}
+
 // WithProjectPaths sets paths to keep in stack traces
 func WithProjectPaths(paths []string) FormatterOption {
 	return func(f *Formatter) {
@@ -64,7 +83,8 @@ func WithProjectPaths(paths []string) FormatterOption {
 // NewFormatter creates a new Formatter
 func NewFormatter(opts ...FormatterOption) *Formatter {
 	f := &Formatter{
-		projectPaths: []string{"Assets/", "Packages/"},
+		projectPaths:  []string{"Assets/", "Packages/"},
+		maxLineLength: DefaultMaxLineLength,
 	}
 	for _, opt := range opts {
 		opt(f)
@@ -224,6 +244,14 @@ func (f *Formatter) IsProjectStackTrace(line string) bool {
 	return false
 }
 
+// truncateLine truncates a line if it exceeds maxLineLength
+func (f *Formatter) truncateLine(line string) string {
+	if f.maxLineLength > 0 && len(line) > f.maxLineLength {
+		return line[:f.maxLineLength] + "..."
+	}
+	return line
+}
+
 // FormatLine formats a log line with appropriate colors
 func (f *Formatter) FormatLine(line string) string {
 	level := f.ClassifyLine(line)
@@ -234,6 +262,9 @@ func (f *Formatter) FormatLine(line string) string {
 			return "" // Hide this line
 		}
 	}
+
+	// Truncate long lines
+	line = f.truncateLine(line)
 
 	if f.noColor {
 		return line
@@ -255,9 +286,19 @@ func (f *Formatter) FormatLine(line string) string {
 
 // ShouldShow returns whether the line should be displayed
 func (f *Formatter) ShouldShow(line string) bool {
+	// Hide empty lines
+	if strings.TrimSpace(line) == "" {
+		return false
+	}
+
 	level := f.ClassifyLine(line)
-	if level == LogLevelStackTrace && f.hideStackTrace {
-		return f.IsProjectStackTrace(line)
+	if level == LogLevelStackTrace {
+		if f.hideAllStackTraces {
+			return false // Hide all stack traces
+		}
+		if f.hideStackTrace {
+			return f.IsProjectStackTrace(line)
+		}
 	}
 	return true
 }

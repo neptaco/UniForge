@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/neptaco/unity-cli/pkg/logger"
@@ -19,6 +20,7 @@ var (
 	logEditor    bool
 	logLines     int
 	logRaw       bool
+	logTrace     bool
 	logFullTrace bool
 	logTimestamp bool
 )
@@ -54,6 +56,9 @@ Examples:
   # Show raw output without colors
   unity-cli logs --raw
 
+  # Show project stack traces (Assets/, Packages/)
+  unity-cli logs --trace
+
   # Show full stack traces (including Unity internals)
   unity-cli logs --full-trace
 
@@ -69,6 +74,7 @@ func init() {
 	logCmd.Flags().BoolVar(&logEditor, "editor", false, "Open log in text editor ($EDITOR or vim)")
 	logCmd.Flags().IntVarP(&logLines, "lines", "n", 100, "Number of lines to show")
 	logCmd.Flags().BoolVar(&logRaw, "raw", false, "Show raw output without colors or filtering")
+	logCmd.Flags().BoolVar(&logTrace, "trace", false, "Show project stack traces (Assets/, Packages/)")
 	logCmd.Flags().BoolVar(&logFullTrace, "full-trace", false, "Show full stack traces including Unity internals")
 	logCmd.Flags().BoolVarP(&logTimestamp, "timestamp", "t", false, "Show timestamp for each line")
 }
@@ -128,6 +134,7 @@ func followLog(logPath string) error {
 	formatter := logger.NewFormatter(
 		logger.WithNoColor(false),
 		logger.WithHideStackTrace(!logFullTrace),
+		logger.WithHideAllStackTraces(!logTrace && !logFullTrace),
 	)
 
 	// Use -F to follow file even if it gets recreated (e.g., when switching projects)
@@ -141,13 +148,21 @@ func followLog(logPath string) error {
 		return err
 	}
 
-	scanner := bufio.NewScanner(stdout)
-	const maxCapacity = 1024 * 1024
-	buf := make([]byte, maxCapacity)
-	scanner.Buffer(buf, maxCapacity)
+	// Use bufio.Reader instead of Scanner to handle very long lines
+	reader := bufio.NewReader(stdout)
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err.Error() != "EOF" {
+				fmt.Fprintf(os.Stderr, "\n%sRead error: %v%s\n", logger.ColorRed, err, logger.ColorReset)
+			}
+			break
+		}
+
+		// Remove trailing newline
+		line = strings.TrimSuffix(line, "\n")
+
 		if formatter.ShouldShow(line) {
 			formatted := formatter.FormatLine(line)
 			if logTimestamp {
@@ -206,6 +221,7 @@ func showLog(logPath string, lines int) error {
 	formatter := logger.NewFormatter(
 		logger.WithNoColor(false),
 		logger.WithHideStackTrace(!logFullTrace),
+		logger.WithHideAllStackTraces(!logTrace && !logFullTrace),
 	)
 
 	for i := start; i < len(allLines); i++ {
