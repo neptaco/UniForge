@@ -70,29 +70,7 @@ uniforge editor install --version 2022.3.10f1 --modules ios,android
 uniforge editor install --from-project ./MyUnityProject
 ```
 
-### Build Unity Project
-
-```bash
-# Basic build
-uniforge build --project ./MyProject --target ios --output ./Build/iOS
-
-# Build with custom method
-uniforge build \
-  --project ./MyProject \
-  --target android \
-  --method MyCompany.Builder.BuildAndroid \
-  --output ./Build/Android \
-  --log-file ./build.log
-
-# CI mode with fail on warning
-uniforge build \
-  --project ./MyProject \
-  --target windows \
-  --ci-mode \
-  --fail-on-warning
-```
-
-### Run Unity with Custom Methods
+### Run Unity in Batch Mode
 
 ```bash
 # Run tests
@@ -178,12 +156,8 @@ jobs:
       
       - name: Build Android
         run: |
-          uniforge build \
-            --project . \
-            --target android \
-            --method CI.Builder.BuildAndroid \
-            --output ./Build/Android \
-            --ci-mode
+          uniforge run -p . --ci -- \
+            -executeMethod CI.Builder.BuildAndroid
 ```
 
 #### Windows
@@ -229,12 +203,8 @@ jobs:
       
       - name: Build Windows
         run: |
-          .\uniforge.exe build `
-            --project . `
-            --target windows `
-            --method CI.Builder.BuildWindows `
-            --output .\Build\Windows `
-            --ci-mode
+          .\uniforge.exe run -p . --ci -- `
+            -executeMethod CI.Builder.BuildWindows
 ```
 
 ### GitLab CI
@@ -245,18 +215,8 @@ build:
   script:
     - curl -L https://github.com/neptaco/uniforge/releases/latest/download/uniforge-linux-amd64 -o uniforge
     - chmod +x uniforge
-    - ./uniforge build --project . --target android --ci-mode
+    - ./uniforge run -p . --ci -- -executeMethod CI.Builder.BuildAndroid
 ```
-
-## Build Targets
-
-Supported build targets:
-- `windows` - Windows 64-bit
-- `macos` - macOS Universal
-- `linux` - Linux 64-bit
-- `android` - Android APK
-- `ios` - iOS Xcode project
-- `webgl` - WebGL build
 
 ## Development
 
