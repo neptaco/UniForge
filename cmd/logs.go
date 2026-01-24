@@ -12,8 +12,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/neptaco/uniforge/pkg/logger"
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -92,7 +92,7 @@ func runLog(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("log file not found: %s", logPath)
 	}
 
-	logrus.Debugf("Log file path: %s", logPath)
+	ui.Debug("Log file path", "path", logPath)
 
 	if logEditor {
 		return openInEditor(logPath)
@@ -151,7 +151,7 @@ func followLog(logPath string) error {
 		dir = logPath[:idx]
 	}
 	if err := watcher.Add(dir); err != nil {
-		logrus.Debugf("Failed to watch directory, falling back to file-only watch: %v", err)
+		ui.Debug("Failed to watch directory, falling back to file-only watch", "error", err)
 	}
 
 	// Also watch the file itself
@@ -189,7 +189,7 @@ func followLog(logPath string) error {
 					time.Sleep(100 * time.Millisecond) // Wait for file to be ready
 					file, offset, err = openAndSeekToEnd(logPath)
 					if err != nil {
-						logrus.Debugf("Failed to reopen file: %v", err)
+						ui.Debug("Failed to reopen file", "error", err)
 						continue
 					}
 					offset = 0 // Start from beginning of new file
@@ -197,15 +197,15 @@ func followLog(logPath string) error {
 
 				offset, err = readNewLines(file, offset, formatter)
 				if err != nil {
-					logrus.Debugf("Error reading new lines: %v", err)
+					ui.Debug("Error reading new lines", "error", err)
 				}
 			}
 
-		case err, ok := <-watcher.Errors:
+		case watchErr, ok := <-watcher.Errors:
 			if !ok {
 				return nil
 			}
-			logrus.Debugf("Watcher error: %v", err)
+			ui.Debug("Watcher error", "error", watchErr)
 
 		case <-ticker.C:
 			// Periodic poll as backup
@@ -216,7 +216,7 @@ func followLog(logPath string) error {
 					file.Close()
 					file, offset, err = openAndSeekToEnd(logPath)
 					if err != nil {
-						logrus.Debugf("Failed to reopen file: %v", err)
+						ui.Debug("Failed to reopen file", "error", err)
 					}
 					offset = 0
 				}

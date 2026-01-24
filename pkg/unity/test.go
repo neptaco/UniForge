@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/neptaco/uniforge/pkg/logger"
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 )
 
 // TestPlatform represents the test platform
@@ -82,7 +82,7 @@ func (t *TestRunner) RunTests(config TestConfig) error {
 	projectDir := filepath.Dir(absProjectPath)
 	cmd.Dir = projectDir
 
-	logrus.Infof("Running Unity tests: %s %s", editorPath, strings.Join(args, " "))
+	ui.Debug("Running Unity tests", "path", editorPath, "args", strings.Join(args, " "))
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start Unity: %w", err)

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 )
 
 type changesetCache struct {
@@ -55,7 +55,7 @@ type graphQLResponse struct {
 func GetChangesetForVersion(version string) (string, error) {
 	// Check cache first
 	if changeset := getFromCache(version); changeset != "" {
-		logrus.Debugf("Using cached changeset for %s: %s", version, changeset)
+		ui.Debug("Using cached changeset", "version", version, "changeset", changeset)
 		return changeset, nil
 	}
 
@@ -66,7 +66,7 @@ func GetChangesetForVersion(version string) (string, error) {
 	}
 	majorMinor := parts[0] + "." + parts[1]
 
-	logrus.Debugf("Fetching changeset for version %s from Unity API", version)
+	ui.Debug("Fetching changeset from Unity API", "version", version)
 
 	// Prepare GraphQL query
 	query := `query GetRelease($limit: Int, $skip: Int, $version: String!, $stream: [UnityReleaseStream!]) {
@@ -138,7 +138,7 @@ func GetChangesetForVersion(version string) (string, error) {
 				// Cache the result
 				putToCache(version, changeset)
 				
-				logrus.Debugf("Found changeset for %s: %s", version, changeset)
+				ui.Debug("Found changeset", "version", version, "changeset", changeset)
 				return changeset, nil
 			}
 		}

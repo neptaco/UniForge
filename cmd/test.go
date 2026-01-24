@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -57,12 +57,12 @@ func init() {
 	testCmd.Flags().BoolVarP(&testTimestamp, "timestamp", "t", false, "Show timestamp for each line")
 
 	if err := testCmd.MarkFlagRequired("platform"); err != nil {
-		logrus.Warnf("Failed to mark platform flag as required: %v", err)
+		ui.Warn("Failed to mark platform flag as required: %v", err)
 	}
 }
 
 func runTest(cmd *cobra.Command, args []string) error {
-	logrus.Infof("Running tests for project: %s", testProject)
+	ui.Info("Running tests for project: %s", testProject)
 
 	project, err := unity.LoadProject(testProject)
 	if err != nil {
@@ -90,6 +90,6 @@ func runTest(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("tests failed: %w", err)
 	}
 
-	fmt.Println("Tests completed successfully")
+	ui.Success("Tests completed successfully")
 	return nil
 }

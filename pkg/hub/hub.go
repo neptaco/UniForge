@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 )
 
 type Client struct {
@@ -76,7 +76,7 @@ func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 	// Add changeset if provided (required for versions not in release list)
 	if options.Changeset != "" {
 		args = append(args, "--changeset", options.Changeset)
-		logrus.Debugf("Using changeset: %s", options.Changeset)
+		ui.Debug("Using changeset", "changeset", options.Changeset)
 	}
 
 	// Add architecture if specified, otherwise auto-detect
@@ -86,7 +86,7 @@ func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 	}
 	if architecture != "" {
 		args = append(args, "--architecture", architecture)
-		logrus.Debugf("Using architecture: %s", architecture)
+		ui.Debug("Using architecture", "arch", architecture)
 	}
 
 	// Add modules
@@ -98,7 +98,7 @@ func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 		}
 	}
 
-	logrus.Debugf("Installing Unity Editor with command: %s %s", c.hubPath, strings.Join(args, " "))
+	ui.Debug("Installing Unity Editor", "command", c.hubPath, "args", strings.Join(args, " "))
 
 	cmd := exec.Command(c.hubPath, args...)
 	cmd.Stdout = os.Stdout
@@ -144,7 +144,7 @@ func (c *Client) IsEditorInstalled(version string) (bool, string, error) {
 	if err == nil && installPath != "" {
 		editorPath := filepath.Join(installPath, version)
 		if fileExists(editorPath) {
-			logrus.Debugf("Found Unity Editor %s via directory check at: %s", version, editorPath)
+			ui.Debug("Found Unity Editor via directory check", "version", version, "path", editorPath)
 
 			// Get full executable path
 			var execPath string
@@ -206,7 +206,7 @@ func (c *Client) GetEditorChangeset(editorPath string) string {
 	if fileExists(versionFilePath) {
 		changeset := c.readChangesetFromVersionFile(versionFilePath)
 		if changeset != "" {
-			logrus.Debugf("Found changeset from version.txt: %s", changeset)
+			ui.Debug("Found changeset from version.txt", "changeset", changeset)
 			return changeset
 		}
 	}
@@ -231,14 +231,14 @@ func (c *Client) GetEditorChangeset(editorPath string) string {
 	}
 
 	if !fileExists(unityExec) {
-		logrus.Debugf("Unity executable not found at: %s", unityExec)
+		ui.Debug("Unity executable not found", "path", unityExec)
 		return ""
 	}
 
 	cmd := exec.Command(unityExec, "-version")
 	output, err := cmd.Output()
 	if err != nil {
-		logrus.Debugf("Failed to get Unity version: %v", err)
+		ui.Debug("Failed to get Unity version", "error", err)
 		return ""
 	}
 
@@ -247,7 +247,7 @@ func (c *Client) GetEditorChangeset(editorPath string) string {
 	if idx := strings.Index(versionStr, "("); idx > 0 {
 		if idx2 := strings.Index(versionStr, ")"); idx2 > idx {
 			changeset := strings.TrimSpace(versionStr[idx+1 : idx2])
-			logrus.Debugf("Found changeset from Unity executable: %s", changeset)
+			ui.Debug("Found changeset from Unity executable", "changeset", changeset)
 			return changeset
 		}
 	}
@@ -259,7 +259,7 @@ func (c *Client) GetEditorChangeset(editorPath string) string {
 func (c *Client) readChangesetFromVersionFile(filepath string) string {
 	data, err := os.ReadFile(filepath)
 	if err != nil {
-		logrus.Debugf("Failed to read version.txt: %v", err)
+		ui.Debug("Failed to read version.txt", "error", err)
 		return ""
 	}
 
@@ -295,19 +295,19 @@ func (c *Client) GetInstallPath() (string, error) {
 	// Try to load from file cache first
 	if cachedPath := c.loadInstallPathCache(); cachedPath != "" {
 		if fileExists(cachedPath) {
-			logrus.Debugf("Found Unity install path from cache: %s", cachedPath)
+			ui.Debug("Found Unity install path from cache", "path", cachedPath)
 			c.installPath = cachedPath
 			return cachedPath, nil
 		}
 		// Cache is stale, will update it later
-		logrus.Debug("Cached install path no longer exists, will update cache")
+		ui.Debug("Cached install path no longer exists, will update cache", "", "")
 	}
 
 	// Try common default paths before calling Unity Hub
 	defaultPaths := c.getDefaultInstallPaths()
 	for _, path := range defaultPaths {
 		if fileExists(path) {
-			logrus.Debugf("Found Unity install path via default location: %s", path)
+			ui.Debug("Found Unity install path via default location", "path", path)
 			c.installPath = path
 			c.saveInstallPathCache(path) // Save to cache
 			return path, nil
@@ -319,7 +319,7 @@ func (c *Client) GetInstallPath() (string, error) {
 		return "", fmt.Errorf("Unity Hub not found")
 	}
 
-	logrus.Debug("Querying Unity Hub for install path...")
+	ui.Debug("Querying Unity Hub for install path")
 	cmd := exec.Command(c.hubPath, "--", "--headless", "install-path", "--get")
 	output, err := cmd.Output()
 	if err != nil {
@@ -352,20 +352,20 @@ func (c *Client) loadInstallPathCache() string {
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logrus.Debugf("Failed to read cache file: %v", err)
+			ui.Debug("Failed to read cache file", "error", err)
 		}
 		return ""
 	}
 
 	var cache installPathCacheData
 	if err := json.Unmarshal(data, &cache); err != nil {
-		logrus.Debugf("Failed to parse cache file: %v", err)
+		ui.Debug("Failed to parse cache file", "error", err)
 		return ""
 	}
 
 	// Check if cache is not too old (24 hours)
 	if time.Since(cache.Timestamp) > 24*time.Hour {
-		logrus.Debug("Cache is older than 24 hours, ignoring")
+		ui.Debug("Cache is older than 24 hours, ignoring")
 		return ""
 	}
 
@@ -383,16 +383,16 @@ func (c *Client) saveInstallPathCache(path string) {
 
 	data, err := json.MarshalIndent(cache, "", "  ")
 	if err != nil {
-		logrus.Debugf("Failed to marshal cache data: %v", err)
+		ui.Debug("Failed to marshal cache data", "error", err)
 		return
 	}
 
 	if err := os.WriteFile(cacheFile, data, 0644); err != nil {
-		logrus.Debugf("Failed to write cache file: %v", err)
+		ui.Debug("Failed to write cache file", "error", err)
 		return
 	}
 
-	logrus.Debugf("Saved install path to cache: %s", cacheFile)
+	ui.Debug("Saved install path to cache", "path", cacheFile)
 }
 
 func (c *Client) getDefaultInstallPaths() []string {
@@ -533,7 +533,7 @@ func (c *Client) mapModules(modules []string) []string {
 		if mappedModule, ok := moduleMap[strings.ToLower(module)]; ok {
 			mapped = append(mapped, mappedModule)
 		} else {
-			logrus.Warnf("Unknown module: %s", module)
+			ui.Warn("Unknown module: %s", module)
 		}
 	}
 
@@ -549,7 +549,7 @@ func findUnityHub() string {
 	paths := getUnityHubPaths()
 	for _, path := range paths {
 		if fileExists(path) {
-			logrus.Debugf("Found Unity Hub at: %s", path)
+			ui.Debug("Found Unity Hub", "path", path)
 			return path
 		}
 	}
@@ -559,7 +559,7 @@ func findUnityHub() string {
 		return pathCmd
 	}
 
-	logrus.Warn("Unity Hub not found. Please install Unity Hub or set UNIFORGE_HUB_PATH environment variable")
+	ui.Warn("Unity Hub not found. Please install Unity Hub or set UNIFORGE_HUB_PATH environment variable")
 	return ""
 }
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/neptaco/uniforge/pkg/hub"
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -20,10 +20,12 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	logrus.Debug("Listing installed Unity Editor versions")
+	ui.Debug("Listing installed Unity Editor versions")
 
-	hubClient := hub.NewClient()
-	editors, err := hubClient.ListInstalledEditors()
+	editors, err := ui.WithSpinner("Fetching installed editors...", func() ([]hub.EditorInfo, error) {
+		hubClient := hub.NewClient()
+		return hubClient.ListInstalledEditors()
+	})
 	if err != nil {
 		return fmt.Errorf("failed to list editors: %w", err)
 	}

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/neptaco/uniforge/pkg/hub"
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -29,10 +29,12 @@ func init() {
 }
 
 func runAvailable(cmd *cobra.Command, args []string) error {
-	logrus.Debug("Fetching available Unity Editor versions")
+	ui.Debug("Fetching available Unity Editor versions")
 
-	hubClient := hub.NewClient()
-	releases, err := hubClient.ListAvailableReleases()
+	releases, err := ui.WithSpinner("Fetching available releases...", func() ([]hub.ReleaseInfo, error) {
+		hubClient := hub.NewClient()
+		return hubClient.ListAvailableReleases()
+	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch available releases: %w", err)
 	}

@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/neptaco/uniforge/pkg/hub"
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -53,7 +53,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			projectPath = "."
 		}
 
-		logrus.Debugf("Detecting Unity version from project: %s", projectPath)
+		ui.Debug("Detecting Unity version from project", "path", projectPath)
 
 		project, err := unity.LoadProject(projectPath)
 		if err != nil {
@@ -64,12 +64,12 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 
 		version = project.UnityVersion
-		logrus.Infof("Detected Unity version: %s", version)
+		ui.Info("Detected Unity version: %s", version)
 
 		// Use changeset from project if not specified via flag
 		if installChangeset == "" && project.Changeset != "" {
 			changeset = project.Changeset
-			logrus.Infof("Detected changeset: %s", changeset)
+			ui.Muted("Detected changeset: %s", changeset)
 		}
 	}
 	
@@ -87,14 +87,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		var err error
 		isInstalled, installedPath, err = hubClient.IsEditorInstalled(version)
 		if err != nil {
-			logrus.Warnf("Failed to check if editor is installed: %v", err)
+			ui.Warn("Failed to check if editor is installed: %v", err)
 		} else if isInstalled {
 			// If already installed and no changeset was provided, try to get it from the installed editor
 			if changeset == "" {
 				installedChangeset := hubClient.GetEditorChangeset(installedPath)
 				if installedChangeset != "" {
 					changeset = installedChangeset
-					logrus.Infof("Found changeset from installed editor: %s", changeset)
+					ui.Muted("Found changeset from installed editor: %s", changeset)
 					fmt.Printf("Unity Editor %s is already installed at: %s\n", version, installedPath)
 					fmt.Printf("Changeset: %s\n", changeset)
 				} else {
@@ -111,18 +111,19 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	
 	// If no changeset and not installed, try to fetch from Unity API
 	if changeset == "" && version != "" && !isInstalled {
-		logrus.Info("No changeset provided, attempting to fetch from Unity API...")
-		apiChangeset, err := unity.GetChangesetForVersion(version)
+		apiChangeset, err := ui.WithSpinner("Fetching changeset from Unity API...", func() (string, error) {
+			return unity.GetChangesetForVersion(version)
+		})
 		if err != nil {
-			logrus.Warnf("Failed to fetch changeset from API: %v", err)
-			logrus.Info("You may need to provide --changeset manually")
+			ui.Warn("Failed to fetch changeset from API: %v", err)
+			ui.Muted("You may need to provide --changeset manually")
 		} else {
 			changeset = apiChangeset
-			logrus.Infof("Found changeset from Unity API: %s", changeset)
+			ui.Muted("Found changeset: %s", changeset)
 		}
 	}
 
-	logrus.Infof("Installing Unity Editor %s", version)
+	ui.Info("Installing Unity Editor %s", version)
 	
 	modules := []string{}
 	if installModules != "" {

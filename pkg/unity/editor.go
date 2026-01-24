@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/neptaco/uniforge/pkg/hub"
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 )
 
 type Editor struct {
@@ -91,7 +91,7 @@ func (e *Editor) Open(projectPath string) error {
 
 	args := []string{"-projectPath", absProjectPath}
 
-	logrus.Infof("Opening Unity Editor: %s %s", editorPath, strings.Join(args, " "))
+	ui.Debug("Opening Unity Editor", "path", editorPath, "args", strings.Join(args, " "))
 
 	cmd := exec.Command(editorPath, args...)
 	cmd.Stdout = os.Stdout
@@ -101,7 +101,7 @@ func (e *Editor) Open(projectPath string) error {
 		return fmt.Errorf("failed to start Unity Editor: %w", err)
 	}
 
-	logrus.Infof("Unity Editor started with PID: %d", cmd.Process.Pid)
+	ui.Debug("Unity Editor started", "pid", cmd.Process.Pid)
 	return nil
 }
 
@@ -127,12 +127,12 @@ func (e *Editor) Close(projectPath string, force bool) error {
 	}
 
 	if force {
-		logrus.Infof("Force killing Unity Editor process (PID: %d)", pid)
+		ui.Debug("Force killing Unity Editor process", "pid", pid)
 		if err := process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill process: %w", err)
 		}
 	} else {
-		logrus.Infof("Terminating Unity Editor process (PID: %d)", pid)
+		ui.Debug("Terminating Unity Editor process", "pid", pid)
 		if err := process.Signal(syscall.SIGTERM); err != nil {
 			return fmt.Errorf("failed to terminate process: %w", err)
 		}
@@ -146,9 +146,9 @@ func (e *Editor) Close(projectPath string, force bool) error {
 
 		select {
 		case <-done:
-			logrus.Info("Unity Editor terminated gracefully")
+			ui.Debug("Unity Editor terminated gracefully")
 		case <-time.After(10 * time.Second):
-			logrus.Warn("Grace period expired, force killing...")
+			ui.Warn("Grace period expired, force killing...")
 			if err := process.Kill(); err != nil {
 				return fmt.Errorf("failed to kill process: %w", err)
 			}

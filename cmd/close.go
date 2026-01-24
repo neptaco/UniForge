@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -39,18 +39,19 @@ func init() {
 }
 
 func runClose(cmd *cobra.Command, args []string) error {
-	logrus.Infof("Closing Unity Editor for project: %s", closeProject)
-
 	project, err := unity.LoadProject(closeProject)
 	if err != nil {
 		return fmt.Errorf("failed to load project: %w", err)
 	}
 
-	editor := unity.NewEditor(project.UnityVersion)
-	if err := editor.Close(project.Path, closeForce); err != nil {
+	err = ui.WithSpinnerNoResult("Closing Unity Editor...", func() error {
+		editor := unity.NewEditor(project.UnityVersion)
+		return editor.Close(project.Path, closeForce)
+	})
+	if err != nil {
 		return fmt.Errorf("failed to close editor: %w", err)
 	}
 
-	fmt.Printf("Unity Editor closed for project: %s\n", project.Name)
+	ui.Success("Unity Editor closed for project: %s", project.Name)
 	return nil
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -42,10 +42,12 @@ func init() {
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 
 	if err := viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
-		logrus.Fatalf("Failed to bind log-level flag: %v", err)
+		ui.Error("Failed to bind log-level flag: %v", err)
+		os.Exit(1)
 	}
 	if err := viper.BindPFlag("no-color", rootCmd.PersistentFlags().Lookup("no-color")); err != nil {
-		logrus.Fatalf("Failed to bind no-color flag: %v", err)
+		ui.Error("Failed to bind no-color flag: %v", err)
+		os.Exit(1)
 	}
 }
 
@@ -65,18 +67,10 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {
-		logrus.Debugf("Using config file: %s", viper.ConfigFileUsed())
+		ui.Debug("Using config file", "path", viper.ConfigFileUsed())
 	}
 
-	level, err := logrus.ParseLevel(viper.GetString("log-level"))
-	if err != nil {
-		level = logrus.InfoLevel
-	}
-	logrus.SetLevel(level)
-
-	if viper.GetBool("no-color") || os.Getenv("NO_COLOR") != "" {
-		logrus.SetFormatter(&logrus.TextFormatter{
-			DisableColors: true,
-		})
-	}
+	// Set debug mode based on log level
+	logLevel := viper.GetString("log-level")
+	ui.SetDebugMode(logLevel == "debug")
 }

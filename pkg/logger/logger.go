@@ -7,8 +7,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 type Logger struct {
@@ -64,7 +62,7 @@ func NewWithOptions(logFile string, opts ...LoggerOption) *Logger {
 	if logFile != "" && logFile != "-" {
 		file, err := os.Create(logFile)
 		if err != nil {
-			logrus.Warnf("Failed to create log file %s: %v", logFile, err)
+			fmt.Fprintf(os.Stderr, "Warning: Failed to create log file %s: %v\n", logFile, err)
 		} else {
 			l.file = file
 			l.rawWriter = file

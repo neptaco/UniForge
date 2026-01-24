@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -34,18 +34,19 @@ func init() {
 }
 
 func runOpen(cmd *cobra.Command, args []string) error {
-	logrus.Infof("Opening Unity project: %s", openProject)
-
 	project, err := unity.LoadProject(openProject)
 	if err != nil {
 		return fmt.Errorf("failed to load project: %w", err)
 	}
 
-	editor := unity.NewEditor(project.UnityVersion)
-	if err := editor.Open(project.Path); err != nil {
+	err = ui.WithSpinnerNoResult("Starting Unity Editor...", func() error {
+		editor := unity.NewEditor(project.UnityVersion)
+		return editor.Open(project.Path)
+	})
+	if err != nil {
 		return fmt.Errorf("failed to open editor: %w", err)
 	}
 
-	fmt.Printf("Unity Editor %s started for project: %s\n", project.UnityVersion, project.Name)
+	ui.Success("Unity Editor %s started for project: %s", project.UnityVersion, project.Name)
 	return nil
 }

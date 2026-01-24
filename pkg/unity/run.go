@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/neptaco/uniforge/pkg/logger"
-	"github.com/sirupsen/logrus"
+	"github.com/neptaco/uniforge/pkg/ui"
 )
 
 // RunConfig holds configuration for running Unity in batch mode
@@ -72,7 +72,7 @@ func (r *Runner) Run(config RunConfig) error {
 	projectDir := filepath.Dir(absProjectPath)
 	cmd.Dir = projectDir
 
-	logrus.Infof("Running Unity: %s %s", editorPath, strings.Join(args, " "))
+	ui.Debug("Running Unity", "path", editorPath, "args", strings.Join(args, " "))
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start Unity: %w", err)

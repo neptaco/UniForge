@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +54,7 @@ func init() {
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
-	logrus.Infof("Running Unity for project: %s", runProject)
+	ui.Info("Running Unity for project: %s", runProject)
 
 	project, err := unity.LoadProject(runProject)
 	if err != nil {
@@ -75,6 +75,6 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("execution failed: %w", err)
 	}
 
-	fmt.Println("Unity execution completed successfully")
+	ui.Success("Unity execution completed successfully")
 	return nil
 }
