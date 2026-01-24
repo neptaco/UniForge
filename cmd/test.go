@@ -9,7 +9,6 @@ import (
 )
 
 var (
-	testProject   string
 	testPlatform  string
 	testFilter    string
 	testResults   string
@@ -20,7 +19,7 @@ var (
 )
 
 var testCmd = &cobra.Command{
-	Use:   "test",
+	Use:   "test [project]",
 	Short: "Run Unity Test Runner",
 	Long: `Run Unity Test Runner with the specified configuration.
 
@@ -40,14 +39,17 @@ Examples:
   uniforge test --platform editmode --results ./test-results.xml
 
   # CI mode with custom timeout
-  uniforge test --platform editmode --ci --timeout 1800`,
+  uniforge test --platform editmode --ci --timeout 1800
+
+  # Specify project path
+  uniforge test /path/to/project --platform editmode`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runTest,
 }
 
 func init() {
 	rootCmd.AddCommand(testCmd)
 
-	testCmd.Flags().StringVarP(&testProject, "project", "p", ".", "Path to Unity project")
 	testCmd.Flags().StringVar(&testPlatform, "platform", "", "Test platform (editmode, playmode)")
 	testCmd.Flags().StringVar(&testFilter, "filter", "", "Test filter expression")
 	testCmd.Flags().StringVar(&testResults, "results", "", "Path to save test results (XML)")
@@ -62,9 +64,14 @@ func init() {
 }
 
 func runTest(cmd *cobra.Command, args []string) error {
-	ui.Info("Running tests for project: %s", testProject)
+	projectPath := "."
+	if len(args) > 0 {
+		projectPath = args[0]
+	}
 
-	project, err := unity.LoadProject(testProject)
+	ui.Info("Running tests for project: %s", projectPath)
+
+	project, err := unity.LoadProject(projectPath)
 	if err != nil {
 		return fmt.Errorf("failed to load project: %w", err)
 	}
@@ -75,7 +82,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 	}
 
 	testConfig := unity.TestConfig{
-		ProjectPath:    testProject,
+		ProjectPath:    projectPath,
 		Platform:       platform,
 		Filter:         testFilter,
 		ResultsFile:    testResults,

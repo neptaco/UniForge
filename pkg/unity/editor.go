@@ -31,9 +31,23 @@ func (e *Editor) GetPath() (string, error) {
 	}
 
 	hubClient := hub.NewClient()
+
+	// First, try to find editor via install path (faster, doesn't require Hub CLI)
+	installPath, err := hubClient.GetInstallPath()
+	if err == nil && installPath != "" {
+		editorDir := filepath.Join(installPath, e.Version)
+		execPath := e.getExecutablePath(editorDir)
+		if fileExists(execPath) {
+			ui.Debug("Found Unity Editor via install path", "version", e.Version, "path", execPath)
+			e.Path = execPath
+			return e.Path, nil
+		}
+	}
+
+	// Fallback: try Hub CLI to list installed editors
 	editors, err := hubClient.ListInstalledEditors()
 	if err != nil {
-		return "", fmt.Errorf("failed to list editors: %w", err)
+		return "", fmt.Errorf("Unity Editor %s not found. Install path: %s, Hub error: %w", e.Version, installPath, err)
 	}
 
 	for _, editor := range editors {
@@ -43,7 +57,12 @@ func (e *Editor) GetPath() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Unity Editor %s not found. Please install it using: uniforge install --version %s", e.Version, e.Version)
+	return "", fmt.Errorf("Unity Editor %s not found. Please install it using: uniforge editor install %s", e.Version, e.Version)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func (e *Editor) getExecutablePath(installPath string) string {

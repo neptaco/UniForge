@@ -8,12 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	openProject string
-)
-
 var openCmd = &cobra.Command{
-	Use:   "open",
+	Use:   "open [project]",
 	Short: "Open Unity Editor with a project",
 	Long: `Open Unity Editor with the specified project in GUI mode.
 The Editor version is automatically detected from the project's ProjectVersion.txt.
@@ -23,18 +19,22 @@ Examples:
   uniforge open
 
   # Open a specific project
-  uniforge open --project /path/to/project`,
+  uniforge open /path/to/project`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runOpen,
 }
 
 func init() {
 	rootCmd.AddCommand(openCmd)
-
-	openCmd.Flags().StringVarP(&openProject, "project", "p", ".", "Path to Unity project")
 }
 
 func runOpen(cmd *cobra.Command, args []string) error {
-	project, err := unity.LoadProject(openProject)
+	projectPath := "."
+	if len(args) > 0 {
+		projectPath = args[0]
+	}
+
+	project, err := unity.LoadProject(projectPath)
 	if err != nil {
 		return fmt.Errorf("failed to load project: %w", err)
 	}

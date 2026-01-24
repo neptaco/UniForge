@@ -9,12 +9,11 @@ import (
 )
 
 var (
-	closeProject string
-	closeForce   bool
+	closeForce bool
 )
 
 var closeCmd = &cobra.Command{
-	Use:   "close",
+	Use:   "close [project]",
 	Short: "Close running Unity Editor",
 	Long: `Close the Unity Editor that has the specified project open.
 By default, sends SIGTERM for graceful shutdown. Use --force for immediate termination.
@@ -24,22 +23,27 @@ Examples:
   uniforge close
 
   # Close with specific project path
-  uniforge close --project /path/to/project
+  uniforge close /path/to/project
 
   # Force close (SIGKILL)
   uniforge close --force`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runClose,
 }
 
 func init() {
 	rootCmd.AddCommand(closeCmd)
 
-	closeCmd.Flags().StringVarP(&closeProject, "project", "p", ".", "Path to Unity project")
 	closeCmd.Flags().BoolVar(&closeForce, "force", false, "Force kill the process (SIGKILL)")
 }
 
 func runClose(cmd *cobra.Command, args []string) error {
-	project, err := unity.LoadProject(closeProject)
+	projectPath := "."
+	if len(args) > 0 {
+		projectPath = args[0]
+	}
+
+	project, err := unity.LoadProject(projectPath)
 	if err != nil {
 		return fmt.Errorf("failed to load project: %w", err)
 	}

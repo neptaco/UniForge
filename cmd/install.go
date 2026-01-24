@@ -11,29 +11,41 @@ import (
 )
 
 var (
-	installVersion     string
-	installFromProject string
-	installModules     string
-	installChangeset   string
+	installModules      string
+	installChangeset    string
 	installArchitecture string
-	installForce       bool
+	installForce        bool
+	installProject      string
 )
 
 var editorInstallCmd = &cobra.Command{
-	Use:   "install",
+	Use:   "install [version]",
 	Short: "Install Unity Editor version",
 	Long: `Install a specific Unity Editor version with optional modules.
 You can specify a version directly or let it detect from a Unity project.
 If no version is specified, it will try to detect from the current directory.
-If the editor is already installed, it will skip the installation unless --force is specified.`,
+If the editor is already installed, it will skip the installation unless --force is specified.
+
+Examples:
+  # Install from current directory's project
+  uniforge editor install
+
+  # Install specific version
+  uniforge editor install 2022.3.10f1
+
+  # Install from specific project path
+  uniforge editor install -p /path/to/project
+
+  # Install with modules
+  uniforge editor install 2022.3.10f1 --modules ios,android`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runInstall,
 }
 
 func init() {
 	editorCmd.AddCommand(editorInstallCmd)
 
-	editorInstallCmd.Flags().StringVar(&installVersion, "version", "", "Unity Editor version to install (e.g., 2022.3.10f1)")
-	editorInstallCmd.Flags().StringVar(&installFromProject, "from-project", "", "Path to Unity project to detect version from")
+	editorInstallCmd.Flags().StringVarP(&installProject, "project", "p", ".", "Path to Unity project")
 	editorInstallCmd.Flags().StringVar(&installModules, "modules", "", "Comma-separated list of modules to install (e.g., ios,android)")
 	editorInstallCmd.Flags().StringVar(&installChangeset, "changeset", "", "Changeset for versions not in release list")
 	editorInstallCmd.Flags().StringVar(&installArchitecture, "architecture", "", "Architecture to install (x86_64 or arm64, auto-detect if not specified)")
@@ -44,20 +56,16 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	var version string
 	var changeset string
 
-	if installVersion != "" {
-		version = installVersion
+	if len(args) > 0 {
+		// Version specified as positional argument
+		version = args[0]
 	} else {
-		// Try to detect from project (explicit path or current directory)
-		projectPath := installFromProject
-		if projectPath == "" {
-			projectPath = "."
-		}
+		// Try to detect from project
+		ui.Debug("Detecting Unity version from project", "path", installProject)
 
-		ui.Debug("Detecting Unity version from project", "path", projectPath)
-
-		project, err := unity.LoadProject(projectPath)
+		project, err := unity.LoadProject(installProject)
 		if err != nil {
-			if installFromProject != "" {
+			if installProject != "." {
 				return fmt.Errorf("failed to load project: %w", err)
 			}
 			return fmt.Errorf("no version specified and current directory is not a Unity project: %w", err)

@@ -9,12 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	restartProject string
-)
-
 var restartCmd = &cobra.Command{
-	Use:   "restart",
+	Use:   "restart [project]",
 	Short: "Restart Unity Editor",
 	Long: `Restart the Unity Editor for the specified project.
 This closes the running Editor and opens it again.
@@ -24,18 +20,22 @@ Examples:
   uniforge restart
 
   # Restart with specific project path
-  uniforge restart --project /path/to/project`,
+  uniforge restart /path/to/project`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runRestart,
 }
 
 func init() {
 	rootCmd.AddCommand(restartCmd)
-
-	restartCmd.Flags().StringVarP(&restartProject, "project", "p", ".", "Path to Unity project")
 }
 
 func runRestart(cmd *cobra.Command, args []string) error {
-	project, err := unity.LoadProject(restartProject)
+	projectPath := "."
+	if len(args) > 0 {
+		projectPath = args[0]
+	}
+
+	project, err := unity.LoadProject(projectPath)
 	if err != nil {
 		return fmt.Errorf("failed to load project: %w", err)
 	}
