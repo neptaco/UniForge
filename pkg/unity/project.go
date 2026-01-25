@@ -55,7 +55,7 @@ func readUnityVersionWithChangeset(versionFile string) (string, string, error) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Parse version
 		if strings.HasPrefix(line, "m_EditorVersion:") {
 			parts := strings.SplitN(line, ":", 2)
@@ -63,7 +63,7 @@ func readUnityVersionWithChangeset(versionFile string) (string, string, error) {
 				version = strings.TrimSpace(parts[1])
 			}
 		}
-		
+
 		// Parse version with changeset
 		// Format: m_EditorVersionWithRevision: 2022.3.10f1 (ff3792e53c62)
 		if strings.HasPrefix(line, "m_EditorVersionWithRevision:") {

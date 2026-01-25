@@ -22,7 +22,7 @@ func TestGetExecutableExtension(t *testing.T) {
 		{"webgl", ""},
 		{"unknown", ""},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.target, func(t *testing.T) {
 			got := GetExecutableExtension(tt.target)
@@ -39,7 +39,7 @@ func TestGetExecutableExtension(t *testing.T) {
 
 func TestGetCurrentPlatform(t *testing.T) {
 	platform := GetCurrentPlatform()
-	
+
 	switch runtime.GOOS {
 	case "darwin":
 		if platform != "macos" {
@@ -62,7 +62,7 @@ func TestGetCurrentPlatform(t *testing.T) {
 
 func TestGetArchitecture(t *testing.T) {
 	arch := GetArchitecture()
-	
+
 	switch runtime.GOARCH {
 	case "amd64":
 		if arch != "x64" {
@@ -85,7 +85,7 @@ func TestGetArchitecture(t *testing.T) {
 
 func TestIsUnixLike(t *testing.T) {
 	isUnix := IsUnixLike()
-	
+
 	if runtime.GOOS == "windows" {
 		if isUnix {
 			t.Error("IsUnixLike() on Windows = true, want false")
@@ -157,7 +157,7 @@ func TestGetPlatformSpecificPath(t *testing.T) {
 			want:  "",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GetPlatformSpecificPath(tt.paths)

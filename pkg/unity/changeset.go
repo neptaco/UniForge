@@ -134,10 +134,10 @@ func GetChangesetForVersion(version string) (string, error) {
 			parts := strings.Split(deepLink, "/")
 			if len(parts) >= 2 {
 				changeset := parts[len(parts)-1]
-				
+
 				// Cache the result
 				putToCache(version, changeset)
-				
+
 				ui.Debug("Found changeset", "version", version, "changeset", changeset)
 				return changeset, nil
 			}

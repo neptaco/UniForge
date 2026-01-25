@@ -95,7 +95,7 @@ func displayRelease(release hub.ReleaseInfo) {
 	} else {
 		fmt.Printf("  - %s\n", release.Version)
 	}
-	
+
 	if release.Changeset != "" {
 		fmt.Printf("    Changeset: %s\n", release.Changeset)
 	}

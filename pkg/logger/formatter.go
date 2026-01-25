@@ -34,9 +34,9 @@ const DefaultMaxLineLength = 500
 // Formatter handles Unity log formatting with colors and filtering
 type Formatter struct {
 	noColor            bool
-	hideStackTrace     bool // Hide non-project stack traces
-	hideAllStackTraces bool // Hide all stack traces completely
-	maxLineLength      int  // Max line length before truncation (0 = no limit)
+	hideStackTrace     bool     // Hide non-project stack traces
+	hideAllStackTraces bool     // Hide all stack traces completely
+	maxLineLength      int      // Max line length before truncation (0 = no limit)
 	projectPaths       []string // Paths to keep in stack traces (e.g., "Assets/")
 	inStackTrace       bool
 	stackTraceBuffer   []string
@@ -137,19 +137,19 @@ var warningPatterns = []*regexp.Regexp{
 
 // Stack trace patterns (applied after TrimSpace)
 var stackTracePatterns = []*regexp.Regexp{
-	regexp.MustCompile(`^at\s+`),                             // "at UnityEngine.Debug.Log..."
-	regexp.MustCompile(`^\(Filename:`),                       // "(Filename: Assets/..."
-	regexp.MustCompile(`^UnityEngine\.\w+.*:`),               // "UnityEngine.Debug:Log..."
-	regexp.MustCompile(`^UnityEditor\.\w+.*:`),               // "UnityEditor.Menu:..."
-	regexp.MustCompile(`^System\.\w+`),                       // "System.Threading.ExecutionContext:..."
-	regexp.MustCompile(`^Mono\.\w+`),                         // "Mono.Security..."
-	regexp.MustCompile(`^Microsoft\.\w+`),                    // "Microsoft.CSharp..."
-	regexp.MustCompile(`^\w+\.\w+[^:]*:[^(]+\(.*\)$`),        // "MyClass.Method:Call (args)" - no (at ...)
-	regexp.MustCompile(`^\w+\.\w+[^:]*:[^(]+\(.*\)\s*\(at`),  // "MyClass.Method:Call<T> (args) (at Assets/..."
-	regexp.MustCompile(`^\w+\.\w+/<>.*:.*\(.*\)`),            // "Class/<>c__DisplayClass:Method ()" - lambda
-	regexp.MustCompile(`^in\s+<`),                            // "in <filename unknown>"
-	regexp.MustCompile(`^\[0x[0-9a-f]+\]`),                   // "[0x00000] in ..."
-	regexp.MustCompile(`^Rethrow as \w+:`),                   // "Rethrow as TargetInvocationException:"
+	regexp.MustCompile(`^at\s+`),                            // "at UnityEngine.Debug.Log..."
+	regexp.MustCompile(`^\(Filename:`),                      // "(Filename: Assets/..."
+	regexp.MustCompile(`^UnityEngine\.\w+.*:`),              // "UnityEngine.Debug:Log..."
+	regexp.MustCompile(`^UnityEditor\.\w+.*:`),              // "UnityEditor.Menu:..."
+	regexp.MustCompile(`^System\.\w+`),                      // "System.Threading.ExecutionContext:..."
+	regexp.MustCompile(`^Mono\.\w+`),                        // "Mono.Security..."
+	regexp.MustCompile(`^Microsoft\.\w+`),                   // "Microsoft.CSharp..."
+	regexp.MustCompile(`^\w+\.\w+[^:]*:[^(]+\(.*\)$`),       // "MyClass.Method:Call (args)" - no (at ...)
+	regexp.MustCompile(`^\w+\.\w+[^:]*:[^(]+\(.*\)\s*\(at`), // "MyClass.Method:Call<T> (args) (at Assets/..."
+	regexp.MustCompile(`^\w+\.\w+/<>.*:.*\(.*\)`),           // "Class/<>c__DisplayClass:Method ()" - lambda
+	regexp.MustCompile(`^in\s+<`),                           // "in <filename unknown>"
+	regexp.MustCompile(`^\[0x[0-9a-f]+\]`),                  // "[0x00000] in ..."
+	regexp.MustCompile(`^Rethrow as \w+:`),                  // "Rethrow as TargetInvocationException:"
 }
 
 // ClassifyLine determines the log level of a line

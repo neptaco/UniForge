@@ -57,7 +57,7 @@ func Warn(format string, args ...any) {
 
 // Error prints an error message to stderr
 func Error(format string, args ...any) {
-	fmt.Fprintln(os.Stderr, errorStyle.Render("✗ " + fmt.Sprintf(format, args...)))
+	fmt.Fprintln(os.Stderr, errorStyle.Render("✗ "+fmt.Sprintf(format, args...)))
 }
 
 // Muted prints a muted/secondary message

@@ -62,10 +62,10 @@ func GetPlatformSpecificPath(paths map[string]string) string {
 	if path, ok := paths[platform]; ok {
 		return path
 	}
-	
+
 	if defaultPath, ok := paths["default"]; ok {
 		return defaultPath
 	}
-	
+
 	return ""
 }

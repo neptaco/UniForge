@@ -80,14 +80,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			ui.Muted("Detected changeset: %s", changeset)
 		}
 	}
-	
+
 	// Override with flag if provided
 	if installChangeset != "" {
 		changeset = installChangeset
 	}
-	
+
 	hubClient := hub.NewClient()
-	
+
 	// Check if already installed (do this once and reuse the result)
 	var isInstalled bool
 	var installedPath string
@@ -116,7 +116,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
-	
+
 	// If no changeset and not installed, try to fetch from Unity API
 	if changeset == "" && version != "" && !isInstalled {
 		apiChangeset, err := ui.WithSpinner("Fetching changeset from Unity API...", func() (string, error) {
@@ -132,7 +132,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Info("Installing Unity Editor %s", version)
-	
+
 	modules := []string{}
 	if installModules != "" {
 		modules = strings.Split(installModules, ",")
@@ -148,7 +148,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		Modules:      modules,
 		Architecture: installArchitecture,
 	}
-	
+
 	if err := hubClient.InstallEditorWithOptions(options); err != nil {
 		return fmt.Errorf("failed to install Unity Editor: %w", err)
 	}
