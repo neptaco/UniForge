@@ -90,9 +90,58 @@ func NewFormatter(opts ...FormatterOption) *Formatter {
 	return f
 }
 
-// Noise patterns - things we want to dim
+// NoiseCategory represents a category of noise logs for grouping
+type NoiseCategory string
+
+const (
+	NoiseCategoryNone       NoiseCategory = ""
+	NoiseCategoryLicensing  NoiseCategory = "Unity Licensing"
+	NoiseCategoryPackage    NoiseCategory = "Package Manager"
+	NoiseCategoryMemory     NoiseCategory = "Memory Configuration"
+	NoiseCategoryAssembly   NoiseCategory = "Assembly Reload"
+	NoiseCategoryGRPC       NoiseCategory = "Unity ILPP"
+	NoiseCategorySubsystems NoiseCategory = "Subsystems"
+	NoiseCategoryOther      NoiseCategory = "Unity Internal"
+)
+
+// noiseCategoryPatterns maps patterns to their categories
+var noiseCategoryPatterns = map[NoiseCategory][]string{
+	NoiseCategoryLicensing: {
+		"[Licensing::",
+	},
+	NoiseCategoryPackage: {
+		"[Package Manager]",
+	},
+	NoiseCategoryMemory: {
+		"memorysetup-",
+		"[UnityMemory]",
+	},
+	NoiseCategoryAssembly: {
+		"Begin MonoManager ReloadAssembly",
+		"Domain Reload Profiling:",
+		"Total time for reloading assemblies",
+		"- Loaded All Assemblies",
+		"- Finished resetting the current domain",
+		"Mono: successfully reloaded assembly",
+		"Registering precompiled unity dll",
+		"Register platform support module:",
+		"Registered in ",
+	},
+	NoiseCategoryGRPC: {
+		"info: Microsoft.AspNetCore.",
+		"info: Microsoft.Hosting.",
+		"warn: Unity.ILPP.",
+	},
+	NoiseCategorySubsystems: {
+		"[Subsystems]",
+	},
+}
+
+// Noise patterns - things we want to dim (uncategorized)
 var noisePatterns = []string{
 	"Mono path[",
+	"Mono config path",
+	"Using monoOptions",
 	"Loading GUID",
 	"Refreshing native plugins",
 	"Preloading",
@@ -102,19 +151,28 @@ var noisePatterns = []string{
 	"Shader warmup",
 	"UnloadTime:",
 	"DisplayProgressbar:",
-	"Registering precompiled user dll",
 	"Native extension for",
 	"- Completed reload",
 	"- Starting playmode",
 	"Reloading assemblies for play mode",
-	"Begin MonoManager ReloadAssembly",
-	"Native extension for",
 	"Initializing Unity.PackageManager",
-	"[Package Manager]",
-	"[Licensing::",
-	"Domain Reload Profiling:",
-	"Total time for reloading assemblies",
 	"Launched and calculation",
+	"[PhysX]",
+	"[usbmuxd]",
+	"Player connection [",
+	"Using cacheserver namespaces",
+	"ImportWorker Server",
+	"Starting:",
+	"WorkingDir:",
+	"Forcing GfxDevice:",
+	"GfxDevice:",
+	"NullGfxDevice:",
+	"    Version:",
+	"    Renderer:",
+	"    Vendor:",
+	"Input System module state changed",
+	"Android Extension - Scanning",
+	"Shader Hidden/",
 }
 
 // Error patterns
@@ -150,6 +208,29 @@ var stackTracePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^Rethrow as \w+:`),                  // "Rethrow as TargetInvocationException:"
 }
 
+// GetNoiseCategory returns the noise category for a line
+func (f *Formatter) GetNoiseCategory(line string) NoiseCategory {
+	trimmed := strings.TrimSpace(line)
+
+	// Check categorized patterns
+	for category, patterns := range noiseCategoryPatterns {
+		for _, pattern := range patterns {
+			if strings.Contains(trimmed, pattern) {
+				return category
+			}
+		}
+	}
+
+	// Check uncategorized noise patterns
+	for _, noise := range noisePatterns {
+		if strings.Contains(trimmed, noise) {
+			return NoiseCategoryOther
+		}
+	}
+
+	return NoiseCategoryNone
+}
+
 // ClassifyLine determines the log level of a line
 func (f *Formatter) ClassifyLine(line string) LogLevel {
 	trimmed := strings.TrimSpace(line)
@@ -158,10 +239,8 @@ func (f *Formatter) ClassifyLine(line string) LogLevel {
 	}
 
 	// Check for noise FIRST (so [Licensing::] etc. are always gray even if they contain "error")
-	for _, noise := range noisePatterns {
-		if strings.Contains(trimmed, noise) {
-			return LogLevelNoise
-		}
+	if f.GetNoiseCategory(line) != NoiseCategoryNone {
+		return LogLevelNoise
 	}
 
 	// Check for stack trace

@@ -10,17 +10,18 @@ import (
 )
 
 type Logger struct {
-	file       *os.File
-	writer     io.Writer
-	rawWriter  io.Writer // For file output without colors
-	ciMode     bool
-	warnings   int
-	errors     int
-	mutex      sync.Mutex
-	pipeReader *io.PipeReader
-	pipeWriter *io.PipeWriter
-	formatter  *Formatter
-	showTime   bool
+	file         *os.File
+	writer       io.Writer
+	rawWriter    io.Writer // For file output without colors
+	ciMode       bool
+	warnings     int
+	errors       int
+	mutex        sync.Mutex
+	pipeReader   *io.PipeReader
+	pipeWriter   *io.PipeWriter
+	formatter    *Formatter
+	showTime     bool
+	currentGroup NoiseCategory // Current active group in CI mode
 }
 
 type LoggerOption func(*Logger)
@@ -107,53 +108,94 @@ func (l *Logger) processLine(line string) {
 	defer l.mutex.Unlock()
 
 	level := l.formatter.ClassifyLine(line)
+	noiseCategory := l.formatter.GetNoiseCategory(line)
 
-	// Count warnings and errors
-	switch level {
-	case LogLevelWarning:
-		l.warnings++
-	case LogLevelError:
-		l.errors++
+	// Count warnings and errors (but not for noise lines that contain "error" keyword)
+	if noiseCategory == NoiseCategoryNone {
+		switch level {
+		case LogLevelWarning:
+			l.warnings++
+		case LogLevelError:
+			l.errors++
+		}
 	}
 
+	// Always write raw to file
+	if l.rawWriter != nil {
+		_, _ = fmt.Fprintln(l.rawWriter, line)
+	}
+
+	if l.ciMode {
+		l.processLineCIMode(line, level, noiseCategory)
+	} else {
+		l.processLineNormalMode(line, level)
+	}
+}
+
+func (l *Logger) processLineCIMode(line string, level LogLevel, noiseCategory NoiseCategory) {
+	// Filter stack traces in CI mode (non-project stack traces)
+	if level == LogLevelStackTrace {
+		if !l.formatter.IsProjectStackTrace(line) {
+			return // Hide non-project stack traces
+		}
+	}
+
+	// Handle noise grouping
+	if noiseCategory != NoiseCategoryNone {
+		// Start a new group if category changed
+		if l.currentGroup != noiseCategory {
+			l.endGroup()
+			l.startGroup(noiseCategory)
+		}
+		_, _ = fmt.Fprintln(os.Stdout, line)
+		return
+	}
+
+	// Not a noise line - end any active group
+	l.endGroup()
+
+	// Output with annotations for errors/warnings
+	switch level {
+	case LogLevelError:
+		_, _ = fmt.Fprintf(os.Stdout, "::error::%s\n", line)
+	case LogLevelWarning:
+		_, _ = fmt.Fprintf(os.Stdout, "::warning::%s\n", line)
+	case LogLevelStackTrace:
+		// Project stack trace - show it
+		_, _ = fmt.Fprintln(os.Stdout, line)
+	default:
+		_, _ = fmt.Fprintln(os.Stdout, line)
+	}
+}
+
+func (l *Logger) processLineNormalMode(line string, level LogLevel) {
 	// Check if we should show this line
 	if !l.formatter.ShouldShow(line) {
-		// Still write to file if we have one (without colors)
-		if l.rawWriter != nil {
-			_, _ = fmt.Fprintln(l.rawWriter, line)
-		}
 		return
 	}
 
 	// Format the line
 	formatted := l.formatter.FormatLine(line)
 
-	if l.ciMode {
-		// CI mode: use GitHub Actions annotations
-		switch level {
-		case LogLevelError:
-			_, _ = fmt.Fprintf(os.Stdout, "::error::%s\n", line)
-		case LogLevelWarning:
-			_, _ = fmt.Fprintf(os.Stdout, "::warning::%s\n", line)
-		default:
-			_, _ = fmt.Fprintln(os.Stdout, line)
-		}
-		// Write raw to file
-		if l.rawWriter != nil {
-			_, _ = fmt.Fprintln(l.rawWriter, line)
-		}
+	if l.showTime {
+		timestamp := time.Now().Format("15:04:05.000")
+		_, _ = fmt.Fprintf(os.Stdout, "%s[%s]%s %s\n", ColorGray, timestamp, ColorReset, formatted)
 	} else {
-		// Normal mode: colorized output to stdout
-		if l.showTime {
-			timestamp := time.Now().Format("15:04:05.000")
-			_, _ = fmt.Fprintf(os.Stdout, "%s[%s]%s %s\n", ColorGray, timestamp, ColorReset, formatted)
-		} else {
-			_, _ = fmt.Fprintln(os.Stdout, formatted)
-		}
-		// Write raw to file
-		if l.rawWriter != nil {
-			_, _ = fmt.Fprintln(l.rawWriter, line)
-		}
+		_, _ = fmt.Fprintln(os.Stdout, formatted)
+	}
+}
+
+func (l *Logger) startGroup(category NoiseCategory) {
+	if category != NoiseCategoryNone {
+		l.currentGroup = category
+		_, _ = fmt.Fprintf(os.Stdout, "::group::%s\n", string(category))
+	}
+}
+
+func (l *Logger) endGroup() {
+	if l.currentGroup != NoiseCategoryNone {
+		_, _ = fmt.Fprintln(os.Stdout, "::endgroup::")
+		l.currentGroup = NoiseCategoryNone
 	}
 }
 
@@ -181,6 +223,14 @@ func (l *Logger) Close() error {
 	}
 
 	time.Sleep(100 * time.Millisecond)
+
+	// End any active group in CI mode
+	l.mutex.Lock()
+	if l.ciMode && l.currentGroup != NoiseCategoryNone {
+		_, _ = fmt.Fprintln(os.Stdout, "::endgroup::")
+		l.currentGroup = NoiseCategoryNone
+	}
+	l.mutex.Unlock()
 
 	warnings, errors := l.GetStats()
 	if warnings > 0 || errors > 0 {

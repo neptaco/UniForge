@@ -211,6 +211,122 @@ func TestFormatterStackTraceFiltering(t *testing.T) {
 	}
 }
 
+func TestFormatterGetNoiseCategory(t *testing.T) {
+	formatter := NewFormatter()
+
+	tests := []struct {
+		name     string
+		line     string
+		expected NoiseCategory
+	}{
+		{
+			name:     "Licensing log",
+			line:     "[Licensing::Module] Successfully connected to LicensingClient",
+			expected: NoiseCategoryLicensing,
+		},
+		{
+			name:     "Package Manager log",
+			line:     "[Package Manager] Registered 73 packages",
+			expected: NoiseCategoryPackage,
+		},
+		{
+			name:     "Memory configuration",
+			line:     "memorysetup-bucket-allocator-granularity=16",
+			expected: NoiseCategoryMemory,
+		},
+		{
+			name:     "UnityMemory log",
+			line:     "[UnityMemory] Configuration Parameters",
+			expected: NoiseCategoryMemory,
+		},
+		{
+			name:     "Assembly reload",
+			line:     "Begin MonoManager ReloadAssembly",
+			expected: NoiseCategoryAssembly,
+		},
+		{
+			name:     "Domain reload profiling",
+			line:     "Domain Reload Profiling: 10945ms",
+			expected: NoiseCategoryAssembly,
+		},
+		{
+			name:     "gRPC log",
+			line:     "info: Microsoft.AspNetCore.Hosting.Diagnostics[1]",
+			expected: NoiseCategoryGRPC,
+		},
+		{
+			name:     "Subsystems log",
+			line:     "[Subsystems] Discovering subsystems at path",
+			expected: NoiseCategorySubsystems,
+		},
+		{
+			name:     "Other noise - Mono path",
+			line:     "Mono path[0] = '/Applications/Unity'",
+			expected: NoiseCategoryOther,
+		},
+		{
+			name:     "Other noise - PhysX",
+			line:     "[PhysX] Initialized MultithreadedTaskDispatcher",
+			expected: NoiseCategoryOther,
+		},
+		{
+			name:     "Normal log - not noise",
+			line:     "Build completed successfully",
+			expected: NoiseCategoryNone,
+		},
+		{
+			name:     "Error log - not noise",
+			line:     "Error: Something went wrong",
+			expected: NoiseCategoryNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			category := formatter.GetNoiseCategory(tt.line)
+			if category != tt.expected {
+				t.Errorf("GetNoiseCategory(%q) = %v, want %v", tt.line, category, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatterNoisePriority(t *testing.T) {
+	formatter := NewFormatter()
+
+	// Noise logs containing "error" keyword should still be classified as Noise, not Error
+	tests := []struct {
+		name     string
+		line     string
+		expected LogLevel
+	}{
+		{
+			name:     "Licensing error is noise, not error",
+			line:     "[Licensing::Module] Error: Access token is unavailable",
+			expected: LogLevelNoise,
+		},
+		{
+			name:     "Licensing client error is noise",
+			line:     "[Licensing::Client] Error: Code 500 while processing request",
+			expected: LogLevelNoise,
+		},
+		{
+			name:     "Real error without noise pattern",
+			line:     "Error: Build failed",
+			expected: LogLevelError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			level := formatter.ClassifyLine(tt.line)
+			if level != tt.expected {
+				t.Errorf("ClassifyLine(%q) = %v, want %v", tt.line, level, tt.expected)
+			}
+		})
+	}
+}
+
 func TestLoggerStats(t *testing.T) {
 	logger := &Logger{
 		formatter: NewFormatter(),
