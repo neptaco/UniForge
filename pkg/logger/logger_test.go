@@ -357,44 +357,49 @@ func TestFormatterNoisePriority(t *testing.T) {
 	}
 }
 
-func TestIsIndentedLine(t *testing.T) {
+func TestGetIndentLevel(t *testing.T) {
 	tests := []struct {
 		name     string
 		line     string
-		expected bool
+		expected int
 	}{
 		{
 			name:     "Tab indented line",
 			line:     "\tSummary:",
-			expected: true,
+			expected: 1,
 		},
 		{
 			name:     "Double tab indented",
 			line:     "\t\tImports: total=0",
-			expected: true,
+			expected: 2,
 		},
 		{
 			name:     "Space indented line",
 			line:     "    indented with spaces",
-			expected: true,
+			expected: 4,
 		},
 		{
 			name:     "Normal line",
 			line:     "Normal log message",
-			expected: false,
+			expected: 0,
 		},
 		{
 			name:     "Empty line",
 			line:     "",
-			expected: false,
+			expected: 0,
+		},
+		{
+			name:     "Mixed tabs and spaces",
+			line:     "\t  mixed",
+			expected: 3,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isIndentedLine(tt.line)
+			result := getIndentLevel(tt.line)
 			if result != tt.expected {
-				t.Errorf("isIndentedLine(%q) = %v, want %v", tt.line, result, tt.expected)
+				t.Errorf("getIndentLevel(%q) = %v, want %v", tt.line, result, tt.expected)
 			}
 		})
 	}

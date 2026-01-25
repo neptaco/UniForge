@@ -10,18 +10,19 @@ import (
 )
 
 type Logger struct {
-	file         *os.File
-	writer       io.Writer
-	rawWriter    io.Writer // For file output without colors
-	ciMode       bool
-	warnings     int
-	errors       int
-	mutex        sync.Mutex
-	pipeReader   *io.PipeReader
-	pipeWriter   *io.PipeWriter
-	formatter    *Formatter
-	showTime     bool
-	currentGroup NoiseCategory // Current active group in CI mode
+	file             *os.File
+	writer           io.Writer
+	rawWriter        io.Writer // For file output without colors
+	ciMode           bool
+	warnings         int
+	errors           int
+	mutex            sync.Mutex
+	pipeReader       *io.PipeReader
+	pipeWriter       *io.PipeWriter
+	formatter        *Formatter
+	showTime         bool
+	currentGroup     NoiseCategory // Current active group in CI mode
+	groupIndentLevel int           // Indentation level when group started
 }
 
 type LoggerOption func(*Logger)
@@ -138,25 +139,28 @@ func (l *Logger) processLineCIMode(line string, level LogLevel, noiseCategory No
 		return
 	}
 
+	currentIndent := getIndentLevel(line)
+
 	// Handle noise grouping
 	if noiseCategory != NoiseCategoryNone {
 		// Start a new group if category changed
 		if l.currentGroup != noiseCategory {
 			l.endGroup()
-			l.startGroup(noiseCategory, line)
+			l.startGroup(noiseCategory, line, currentIndent)
 		} else {
 			_, _ = fmt.Fprintln(os.Stdout, line)
 		}
 		return
 	}
 
-	// Check if this is an indented continuation line (part of current group)
-	if l.currentGroup != NoiseCategoryNone && isIndentedLine(line) {
+	// Check if this line should stay in the current group based on indentation
+	// A line stays in the group if it has deeper indentation than when the group started
+	if l.currentGroup != NoiseCategoryNone && currentIndent > l.groupIndentLevel {
 		_, _ = fmt.Fprintln(os.Stdout, line)
 		return
 	}
 
-	// Not a noise line - end any active group
+	// Not a noise line or indentation returned to group start level - end any active group
 	l.endGroup()
 
 	// Output with annotations for errors/warnings
@@ -187,9 +191,10 @@ func (l *Logger) processLineNormalMode(line string, level LogLevel) {
 	}
 }
 
-func (l *Logger) startGroup(category NoiseCategory, firstLine string) {
+func (l *Logger) startGroup(category NoiseCategory, firstLine string, indentLevel int) {
 	if category != NoiseCategoryNone {
 		l.currentGroup = category
+		l.groupIndentLevel = indentLevel
 		_, _ = fmt.Fprintf(os.Stdout, "::group::%s\n", firstLine)
 	}
 }
@@ -198,16 +203,22 @@ func (l *Logger) endGroup() {
 	if l.currentGroup != NoiseCategoryNone {
 		_, _ = fmt.Fprintln(os.Stdout, "::endgroup::")
 		l.currentGroup = NoiseCategoryNone
+		l.groupIndentLevel = 0
 	}
 }
 
-// isIndentedLine checks if a line starts with whitespace (tab or spaces)
-// These are typically continuation lines of a previous log entry
-func isIndentedLine(line string) bool {
-	if len(line) == 0 {
-		return false
+// getIndentLevel returns the indentation level of a line
+// Tabs count as 1, spaces count as 1 each
+func getIndentLevel(line string) int {
+	level := 0
+	for _, ch := range line {
+		if ch == '\t' || ch == ' ' {
+			level++
+		} else {
+			break
+		}
 	}
-	return line[0] == '\t' || line[0] == ' '
+	return level
 }
 
 func (l *Logger) HasWarnings() bool {
