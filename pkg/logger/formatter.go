@@ -194,8 +194,8 @@ var noisePatterns = []string{
 // Error patterns
 var errorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\berror\b`),
-	regexp.MustCompile(`(?i)exception[:\s]`),    // Exception followed by : or space (not in filenames)
-	regexp.MustCompile(`(?i)Exception$`),        // Exception at end of line
+	regexp.MustCompile(`(?i)exception[:\s]`), // Exception followed by : or space (not in filenames)
+	regexp.MustCompile(`(?i)Exception$`),     // Exception at end of line
 	regexp.MustCompile(`(?i)\bfailed\b`),
 	regexp.MustCompile(`(?i)^error CS\d+`),
 	regexp.MustCompile(`(?i)^Assets/.*\.cs\(\d+,\d+\):\s*error`),

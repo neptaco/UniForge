@@ -143,8 +143,15 @@ func (l *Logger) processLineCIMode(line string, level LogLevel, noiseCategory No
 		// Start a new group if category changed
 		if l.currentGroup != noiseCategory {
 			l.endGroup()
-			l.startGroup(noiseCategory)
+			l.startGroup(noiseCategory, line)
+		} else {
+			_, _ = fmt.Fprintln(os.Stdout, line)
 		}
+		return
+	}
+
+	// Check if this is an indented continuation line (part of current group)
+	if l.currentGroup != NoiseCategoryNone && isIndentedLine(line) {
 		_, _ = fmt.Fprintln(os.Stdout, line)
 		return
 	}
@@ -180,10 +187,10 @@ func (l *Logger) processLineNormalMode(line string, level LogLevel) {
 	}
 }
 
-func (l *Logger) startGroup(category NoiseCategory) {
+func (l *Logger) startGroup(category NoiseCategory, firstLine string) {
 	if category != NoiseCategoryNone {
 		l.currentGroup = category
-		_, _ = fmt.Fprintf(os.Stdout, "::group::%s\n", string(category))
+		_, _ = fmt.Fprintf(os.Stdout, "::group::%s\n", firstLine)
 	}
 }
 
@@ -192,6 +199,15 @@ func (l *Logger) endGroup() {
 		_, _ = fmt.Fprintln(os.Stdout, "::endgroup::")
 		l.currentGroup = NoiseCategoryNone
 	}
+}
+
+// isIndentedLine checks if a line starts with whitespace (tab or spaces)
+// These are typically continuation lines of a previous log entry
+func isIndentedLine(line string) bool {
+	if len(line) == 0 {
+		return false
+	}
+	return line[0] == '\t' || line[0] == ' '
 }
 
 func (l *Logger) HasWarnings() bool {
