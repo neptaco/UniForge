@@ -8,6 +8,9 @@ Command-line tool for Unity development. Manage Unity Editor installations, buil
 - 📦 Install Unity Editor versions via Unity Hub
 - 🔨 Build Unity projects for multiple platforms
 - 🤖 Run Unity in batch mode for CI/CD
+- 🧪 Run Unity Test Runner (EditMode/PlayMode)
+- 🔑 Manage Unity license for CI/CD environments
+- 📋 Check .meta file integrity
 - 📝 Comprehensive logging with CI-friendly output
 - 🖥️ Cross-platform support (macOS, Windows, Linux)
 
@@ -42,7 +45,7 @@ task build
 ## Prerequisites
 
 - Unity Hub installed
-- Go 1.21+ (for building from source)
+- Go 1.24+ (for building from source)
 - Task (for building from source)
 
 ### Windows-specific Requirements
@@ -61,30 +64,104 @@ task build
 uniforge editor list
 
 # Install specific version
-uniforge editor install --version 2022.3.10f1
+uniforge editor install 2022.3.10f1
 
 # Install with modules
-uniforge editor install --version 2022.3.10f1 --modules ios,android
+uniforge editor install 2022.3.10f1 --modules ios,android
 
 # Install from project (auto-detect version)
-uniforge editor install --from-project ./MyUnityProject
+uniforge editor install -p ./MyUnityProject
+```
+
+### Open/Close Unity Editor
+
+```bash
+# Open Unity Editor with a project
+uniforge open ./MyProject
+
+# Close running Unity Editor
+uniforge close ./MyProject
+
+# Force close (without save prompt)
+uniforge close ./MyProject --force
+
+# Restart Unity Editor
+uniforge restart ./MyProject
 ```
 
 ### Run Unity in Batch Mode
 
 ```bash
-# Run tests
-uniforge run \
-  --project ./MyProject \
-  --execute-method TestRunner.RunAllTests \
-  --test-results ./test-results.xml \
-  --quit
+# Run custom method
+uniforge run ./MyProject -- -executeMethod Build.Execute
 
-# Run multiple methods
-uniforge run \
-  --project ./MyProject \
-  --execute-method "Setup.Initialize;Build.Execute;Cleanup.Finish" \
-  --quit
+# Run with CI mode (optimized output)
+uniforge run ./MyProject --ci -- -executeMethod Build.Execute
+```
+
+### Run Tests
+
+```bash
+# Run EditMode tests
+uniforge test ./MyProject --platform editmode
+
+# Run PlayMode tests
+uniforge test ./MyProject --platform playmode
+
+# Run with filter and save results
+uniforge test ./MyProject --platform editmode \
+  --filter MyTestClass \
+  --results ./test-results.xml
+
+# CI mode with custom timeout
+uniforge test ./MyProject --platform editmode --ci --timeout 1800
+```
+
+### Check .meta File Integrity
+
+```bash
+# Check for missing/orphan .meta files and duplicate GUIDs
+uniforge meta check ./MyProject
+
+# Fix orphan .meta files (with confirmation)
+uniforge meta check ./MyProject --fix
+
+# Fix without confirmation (for CI)
+uniforge meta check ./MyProject --fix --force
+```
+
+### Manage Unity License (CI/CD)
+
+```bash
+# Activate license
+uniforge license activate \
+  --username user@example.com \
+  --password $UNITY_PASSWORD \
+  --serial $UNITY_SERIAL
+
+# Check license status
+uniforge license status
+
+# Return license (important for CI)
+uniforge license return \
+  --username user@example.com \
+  --password $UNITY_PASSWORD
+```
+
+### View Unity Logs
+
+```bash
+# Show last 100 lines (default)
+uniforge logs
+
+# Follow log in real-time
+uniforge logs -f
+
+# Show with timestamps
+uniforge logs -f -t
+
+# Show project stack traces
+uniforge logs --trace
 ```
 
 ## Configuration
@@ -92,24 +169,29 @@ uniforge run \
 ### Environment Variables
 
 ```bash
-UNIFORGE_HUB_PATH        # Path to Unity Hub executable
-UNITY_HUB_INSTALL_PATH    # Custom Unity Editor installation directory (speeds up detection)
-UNIFORGE_LOG_LEVEL       # Log level (debug, info, warn, error)
-UNIFORGE_TIMEOUT         # Default timeout in seconds
-UNIFORGE_NO_COLOR        # Disable colored output
+UNIFORGE_HUB_PATH           # Path to Unity Hub executable
+UNIFORGE_EDITOR_BASE_PATH   # Custom Unity Editor base directory (see below)
+UNIFORGE_LOG_LEVEL          # Log level (debug, info, warn, error)
+UNIFORGE_TIMEOUT            # Default timeout in seconds
+UNIFORGE_NO_COLOR           # Disable colored output
 ```
 
-#### Performance Optimization
+#### Custom Editor Location
 
-If you have Unity Editors installed in a custom location, set `UNITY_HUB_INSTALL_PATH` to avoid Unity Hub CLI calls:
+Unity Editors installed in non-default locations are automatically detected via Unity Hub CLI. However, setting `UNIFORGE_EDITOR_BASE_PATH` improves performance by skipping the Hub CLI call.
 
 ```bash
-# Example: Custom installation directory
-export UNITY_HUB_INSTALL_PATH=/Volumes/ExternalSSD/Applications/Unity/Hub/Editor
+# Example: External SSD (macOS)
+export UNIFORGE_EDITOR_BASE_PATH=/Volumes/ExternalSSD/Unity/Hub/Editor
 
-# This will make editor detection instant (< 0.04 seconds)
-uniforge editor install --version 2022.3.60f1
+# Example: Custom location (Windows)
+set UNIFORGE_EDITOR_BASE_PATH=D:\Unity\Hub\Editor
 ```
+
+Default locations (detected without configuration):
+- **macOS**: `/Applications/Unity/Hub/Editor`
+- **Windows**: `C:\Program Files\Unity\Hub\Editor`
+- **Linux**: `~/Unity/Hub/Editor`
 
 ### Configuration File
 
@@ -125,26 +207,40 @@ no-color: false
 ### GitHub Actions
 
 ```yaml
-name: Build Unity Project
+name: Unity CI
 
 on: [push]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: neptaco/setup-uniforge@v1
 
+      - name: Activate License
+        run: |
+          uniforge license activate \
+            --username ${{ secrets.UNITY_EMAIL }} \
+            --password ${{ secrets.UNITY_PASSWORD }} \
+            --serial ${{ secrets.UNITY_SERIAL }}
+
       - name: Install Unity
-        run: uniforge editor install --from-project . --modules android
+        run: uniforge editor install --modules ios,android
+
+      - name: Check .meta files
+        run: uniforge meta check .
 
       - name: Run Tests
-        run: uniforge run -p . --ci -- -executeMethod CI.TestRunner.RunTests
+        run: uniforge test . --platform editmode --ci --results ./results.xml
 
-      - name: Build
-        run: uniforge run -p . --ci -- -executeMethod CI.Builder.Build
+      - name: Return License
+        if: always()
+        run: |
+          uniforge license return \
+            --username ${{ secrets.UNITY_EMAIL }} \
+            --password ${{ secrets.UNITY_PASSWORD }}
 ```
 
 Works on `ubuntu-latest`, `macos-latest`, and `windows-latest`.
@@ -153,7 +249,7 @@ Works on `ubuntu-latest`, `macos-latest`, and `windows-latest`.
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.24+
 - Task
 
 ### Building
@@ -221,6 +317,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 
 ## Support
 

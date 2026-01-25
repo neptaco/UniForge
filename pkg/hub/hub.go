@@ -399,7 +399,8 @@ func (c *Client) getDefaultInstallPaths() []string {
 	var paths []string
 
 	// Check for custom install path from environment variable
-	if customPath := os.Getenv("UNITY_HUB_INSTALL_PATH"); customPath != "" {
+	// For users who installed Unity Editors in a custom location (e.g., external SSD)
+	if customPath := os.Getenv("UNIFORGE_EDITOR_BASE_PATH"); customPath != "" {
 		paths = append(paths, customPath)
 	}
 
