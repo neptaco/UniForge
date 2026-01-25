@@ -16,16 +16,16 @@ Command-line tool for Unity development. Manage Unity Editor installations, buil
 
 ## Installation
 
-### Using Homebrew (macOS)
+### Using Homebrew (macOS/Linux)
 
 ```bash
-brew tap neptaco/uniforge
+brew tap neptaco/tap
 brew install uniforge
 ```
 
 ### Using Scoop (Windows)
 
-```bash
+```powershell
 scoop bucket add neptaco https://github.com/neptaco/scoop-bucket
 scoop install uniforge
 ```
