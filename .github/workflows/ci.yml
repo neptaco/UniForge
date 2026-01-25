@@ -68,7 +68,9 @@ jobs:
     - name: Run go vet
       run: go vet ./...
 
+    # golangci-lint v2.x requires golangci-lint-action@v7 (v6 only supports v1.x)
+    # Keep this version in sync with mise.toml
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v7
       with:
-        version: latest
+        version: v2.8.0
