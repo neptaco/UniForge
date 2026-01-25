@@ -8,33 +8,50 @@ disable-model-invocation: true
 
 次回リリースに含まれる変更をプレビューします。
 
-## 現在の状態
+## 実行手順
+
+以下のコマンドを順番に実行してください：
+
+### 1. 現在の状態確認
 
 ```bash
-# 現在のバージョン
-echo "現在のタグ: $(git describe --tags --abbrev=0 2>/dev/null || echo 'なし')"
-
-# ブランチ
-echo "ブランチ: $(git branch --show-current)"
+git describe --tags --abbrev=0 2>/dev/null || echo "タグなし"
+git branch --show-current
 ```
 
-## 前回リリースからの変更
+### 2. 前回リリースからのコミット一覧
 
-### コミット一覧
+最新タグがある場合：
+```bash
+git log --oneline --no-merges $(git describe --tags --abbrev=0)..HEAD
+```
 
-!`git log $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD --oneline --no-merges 2>/dev/null || git log --oneline -20`
+タグがない場合：
+```bash
+git log --oneline --no-merges -20
+```
 
-### 変更の分類
+### 3. 変更の分類
 
-リリースノートに含まれるもの：
+コミット一覧から以下を分類して報告：
+
+**リリースノートに含まれるもの：**
 - `feat:` 新機能
 - `fix:` バグ修正
 - `BREAKING CHANGE:` 破壊的変更
 
-リリースノートに含まれないもの：
+**リリースノートに含まれないもの：**
 - `docs:`, `test:`, `chore:`, `ci:`, `build:`, `refactor:`, `style:`, `perf:`
 
-## スナップショットビルド（ドライラン）
+### 4. 推奨バージョンの提示
+
+| 変更タイプ | 次のバージョン |
+|-----------|---------------|
+| BREAKING CHANGE あり | メジャーアップ（例: v1.x.x → v2.0.0） |
+| feat: あり | マイナーアップ（例: v1.0.x → v1.1.0） |
+| fix: のみ | パッチアップ（例: v1.0.0 → v1.0.1） |
+
+## スナップショットビルド（オプション）
 
 ローカルでビルドをテストする場合：
 
@@ -43,16 +60,6 @@ task release-snapshot
 ```
 
 これにより `dist/` ディレクトリにビルド成果物が生成されます。
-
-## 推奨バージョン
-
-変更内容に基づいて、以下のバージョンを推奨：
-
-| 変更タイプ | 次のバージョン |
-|-----------|---------------|
-| BREAKING CHANGE あり | メジャーアップ（例: v1.x.x → v2.0.0） |
-| feat: あり | マイナーアップ（例: v1.0.x → v1.1.0） |
-| fix: のみ | パッチアップ（例: v1.0.0 → v1.0.1） |
 
 ## 次のステップ
 
