@@ -24,7 +24,10 @@ var editorInstallCmd = &cobra.Command{
 	Long: `Install a specific Unity Editor version with optional modules.
 You can specify a version directly or let it detect from a Unity project.
 If no version is specified, it will try to detect from the current directory.
-If the editor is already installed, it will skip the installation unless --force is specified.
+
+If the editor is already installed:
+  - Without --modules: skips installation (use --force to reinstall)
+  - With --modules: checks if modules are installed and adds missing ones
 
 Examples:
   # Install from current directory's project
@@ -37,7 +40,10 @@ Examples:
   uniforge editor install -p /path/to/project
 
   # Install with modules
-  uniforge editor install 2022.3.10f1 --modules ios,android`,
+  uniforge editor install 2022.3.10f1 --modules ios,android
+
+  # Add modules to existing editor (only installs missing modules)
+  uniforge editor install 2022.3.10f1 --modules webgl`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runInstall,
 }
@@ -88,6 +94,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	hubClient := hub.NewClient()
 
+	// Parse modules early so we can check if they're installed
+	modules := []string{}
+	if installModules != "" {
+		modules = strings.Split(installModules, ",")
+		for i := range modules {
+			modules[i] = strings.TrimSpace(modules[i])
+		}
+	}
+
 	// Check if already installed (do this once and reuse the result)
 	var isInstalled bool
 	var installedPath string
@@ -103,14 +118,31 @@ func runInstall(cmd *cobra.Command, args []string) error {
 				if installedChangeset != "" {
 					changeset = installedChangeset
 					ui.Muted("Found changeset from installed editor: %s", changeset)
-					fmt.Printf("Unity Editor %s is already installed at: %s\n", version, installedPath)
-					fmt.Printf("Changeset: %s\n", changeset)
-				} else {
-					fmt.Printf("Unity Editor %s is already installed at: %s\n", version, installedPath)
 				}
-			} else {
-				fmt.Printf("Unity Editor %s is already installed at: %s\n", version, installedPath)
+			}
+
+			// Check if requested modules are installed
+			if len(modules) > 0 {
+				missingModules := hubClient.GetMissingModules(installedPath, modules)
+				if len(missingModules) > 0 {
+					ui.Info("Unity Editor %s is installed, but missing modules: %s", version, strings.Join(missingModules, ", "))
+					ui.Info("Installing missing modules...")
+
+					if err := hubClient.InstallModules(version, missingModules); err != nil {
+						return fmt.Errorf("failed to install modules: %w", err)
+					}
+
+					fmt.Printf("Successfully installed modules: %s\n", strings.Join(missingModules, ", "))
+					return nil
+				}
+			}
+
+			fmt.Printf("Unity Editor %s is already installed at: %s\n", version, installedPath)
+			if changeset != "" {
 				fmt.Printf("Changeset: %s\n", changeset)
+			}
+			if len(modules) > 0 {
+				fmt.Printf("All requested modules are already installed: %s\n", strings.Join(modules, ", "))
 			}
 			fmt.Println("Use --force to reinstall")
 			return nil
@@ -132,14 +164,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Info("Installing Unity Editor %s", version)
-
-	modules := []string{}
-	if installModules != "" {
-		modules = strings.Split(installModules, ",")
-		for i := range modules {
-			modules[i] = strings.TrimSpace(modules[i])
-		}
-	}
 
 	// Configure installation options
 	options := hub.InstallOptions{

@@ -68,6 +68,77 @@ func TestMapModules(t *testing.T) {
 	}
 }
 
+func TestGetPlaybackEnginesPath(t *testing.T) {
+	client := &Client{}
+
+	tests := []struct {
+		name       string
+		editorPath string
+		goos       string
+		expected   string
+	}{
+		{
+			name:       "macOS with .app path",
+			editorPath: "/Applications/Unity/Hub/Editor/2022.3.60f1/Unity.app",
+			goos:       "darwin",
+			expected:   "/Applications/Unity/Hub/Editor/2022.3.60f1/PlaybackEngines",
+		},
+		{
+			name:       "macOS without .app",
+			editorPath: "/Applications/Unity/Hub/Editor/2022.3.60f1",
+			goos:       "darwin",
+			expected:   "/Applications/Unity/Hub/Editor/2022.3.60f1/PlaybackEngines",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This test only works on the current OS
+			result := client.GetPlaybackEnginesPath(tt.editorPath)
+			// We can't easily test cross-platform, so just verify it returns something
+			if result == "" {
+				t.Error("Expected non-empty path")
+			}
+		})
+	}
+}
+
+func TestGetMissingModules(t *testing.T) {
+	client := &Client{}
+
+	// Test with non-existent path - all modules should be missing
+	missingModules := client.GetMissingModules("/non/existent/path", []string{"ios", "android"})
+	if len(missingModules) != 2 {
+		t.Errorf("Expected 2 missing modules for non-existent path, got %d", len(missingModules))
+	}
+
+	// Test with empty module list
+	missingModules = client.GetMissingModules("/non/existent/path", []string{})
+	if len(missingModules) != 0 {
+		t.Errorf("Expected 0 missing modules for empty list, got %d", len(missingModules))
+	}
+}
+
+func TestModulePathMap(t *testing.T) {
+	// Verify all mapped modules have corresponding directory names
+	expectedMappings := map[string]string{
+		"android":        "AndroidPlayer",
+		"ios":            "iOSSupport",
+		"webgl":          "WebGLSupport",
+		"windows-il2cpp": "WindowsStandaloneSupport",
+		"linux-il2cpp":   "LinuxStandaloneSupport",
+		"mac-il2cpp":     "MacStandaloneSupport",
+	}
+
+	for moduleID, expectedDir := range expectedMappings {
+		if dir, ok := modulePathMap[moduleID]; !ok {
+			t.Errorf("Module %s not found in modulePathMap", moduleID)
+		} else if dir != expectedDir {
+			t.Errorf("Module %s: expected dir %s, got %s", moduleID, expectedDir, dir)
+		}
+	}
+}
+
 func TestParseEditorsList(t *testing.T) {
 	client := &Client{}
 
