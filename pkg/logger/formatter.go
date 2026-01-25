@@ -205,7 +205,7 @@ var errorPatterns = []*regexp.Regexp{
 var notErrorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\d+\.?\d*\s*kb\s+\d+\.?\d*%`),          // Build size report lines like "0.1 kb 0.0%"
 	regexp.MustCompile(`Exception\.cs`),                        // Files named *Exception.cs
-	regexp.MustCompile(`(?i)^Error:\s*WebGL`),                  // WebGL settings output like "Error: WebGL Exception Support:"
+	regexp.MustCompile(`(?i)WebGL\s+Exception\s+Support`),       // WebGL settings output like "WebGL Exception Support:"
 	regexp.MustCompile(`(?i)abort_threads:\s*Failed aborting`), // Unity shutdown message (not a real error)
 }
 

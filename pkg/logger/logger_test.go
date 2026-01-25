@@ -347,7 +347,7 @@ func TestFormatterNoisePriority(t *testing.T) {
 		},
 		{
 			name:     "WebGL settings output is not error",
-			line:     "Error: WebGL Exception Support: ExplicitlyThrownExceptionsOnly",
+			line:     "WebGL Exception Support: ExplicitlyThrownExceptionsOnly",
 			expected: LogLevelNormal,
 		},
 		{
