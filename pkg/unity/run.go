@@ -64,7 +64,7 @@ func (r *Runner) Run(config RunConfig) error {
 		logger.WithCIMode(config.CIMode),
 		logger.WithShowTime(config.ShowTimestamp),
 	)
-	defer log.Close()
+	defer func() { _ = log.Close() }()
 
 	cmd.Stdout = log
 	cmd.Stderr = log
@@ -82,7 +82,7 @@ func (r *Runner) Run(config RunConfig) error {
 		if ctx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("execution timeout after %d seconds", timeout)
 		}
-		return fmt.Errorf("Unity execution failed: %w", err)
+		return fmt.Errorf("unity execution failed: %w", err)
 	}
 
 	return nil

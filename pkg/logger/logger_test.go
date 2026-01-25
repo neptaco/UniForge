@@ -16,7 +16,7 @@ func TestNewLogger(t *testing.T) {
 		logFile := filepath.Join(tempDir, "test.log")
 
 		logger := New(logFile, false)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		if logger.file == nil {
 			t.Error("Expected file to be opened")
@@ -29,7 +29,7 @@ func TestNewLogger(t *testing.T) {
 
 	t.Run("Without log file", func(t *testing.T) {
 		logger := New("-", false)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		if logger.file != nil {
 			t.Error("Expected file to be nil")
@@ -38,7 +38,7 @@ func TestNewLogger(t *testing.T) {
 
 	t.Run("CI mode", func(t *testing.T) {
 		logger := New("-", true)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		if !logger.ciMode {
 			t.Error("Expected CI mode to be enabled")
@@ -259,7 +259,7 @@ func TestLoggerWrite(t *testing.T) {
 	}
 
 	time.Sleep(100 * time.Millisecond)
-	logger.Close()
+	_ = logger.Close()
 }
 
 func TestLoggerClose(t *testing.T) {

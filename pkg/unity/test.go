@@ -74,7 +74,7 @@ func (t *TestRunner) RunTests(config TestConfig) error {
 		logger.WithCIMode(config.CIMode),
 		logger.WithShowTime(config.ShowTimestamp),
 	)
-	defer log.Close()
+	defer func() { _ = log.Close() }()
 
 	cmd.Stdout = log
 	cmd.Stderr = log

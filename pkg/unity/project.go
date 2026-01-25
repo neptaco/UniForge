@@ -49,7 +49,7 @@ func readUnityVersionWithChangeset(versionFile string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var version, changeset string
 	scanner := bufio.NewScanner(file)

@@ -109,9 +109,10 @@ func (l *Logger) processLine(line string) {
 	level := l.formatter.ClassifyLine(line)
 
 	// Count warnings and errors
-	if level == LogLevelWarning {
+	switch level {
+	case LogLevelWarning:
 		l.warnings++
-	} else if level == LogLevelError {
+	case LogLevelError:
 		l.errors++
 	}
 
@@ -119,7 +120,7 @@ func (l *Logger) processLine(line string) {
 	if !l.formatter.ShouldShow(line) {
 		// Still write to file if we have one (without colors)
 		if l.rawWriter != nil {
-			fmt.Fprintln(l.rawWriter, line)
+			_, _ = fmt.Fprintln(l.rawWriter, line)
 		}
 		return
 	}
@@ -131,27 +132,27 @@ func (l *Logger) processLine(line string) {
 		// CI mode: use GitHub Actions annotations
 		switch level {
 		case LogLevelError:
-			fmt.Fprintf(os.Stdout, "::error::%s\n", line)
+			_, _ = fmt.Fprintf(os.Stdout, "::error::%s\n", line)
 		case LogLevelWarning:
-			fmt.Fprintf(os.Stdout, "::warning::%s\n", line)
+			_, _ = fmt.Fprintf(os.Stdout, "::warning::%s\n", line)
 		default:
-			fmt.Fprintln(os.Stdout, line)
+			_, _ = fmt.Fprintln(os.Stdout, line)
 		}
 		// Write raw to file
 		if l.rawWriter != nil {
-			fmt.Fprintln(l.rawWriter, line)
+			_, _ = fmt.Fprintln(l.rawWriter, line)
 		}
 	} else {
 		// Normal mode: colorized output to stdout
 		if l.showTime {
 			timestamp := time.Now().Format("15:04:05.000")
-			fmt.Fprintf(os.Stdout, "%s[%s]%s %s\n", ColorGray, timestamp, ColorReset, formatted)
+			_, _ = fmt.Fprintf(os.Stdout, "%s[%s]%s %s\n", ColorGray, timestamp, ColorReset, formatted)
 		} else {
-			fmt.Fprintln(os.Stdout, formatted)
+			_, _ = fmt.Fprintln(os.Stdout, formatted)
 		}
 		// Write raw to file
 		if l.rawWriter != nil {
-			fmt.Fprintln(l.rawWriter, line)
+			_, _ = fmt.Fprintln(l.rawWriter, line)
 		}
 	}
 }
@@ -176,7 +177,7 @@ func (l *Logger) GetStats() (warnings, errors int) {
 
 func (l *Logger) Close() error {
 	if l.pipeWriter != nil {
-		l.pipeWriter.Close()
+		_ = l.pipeWriter.Close()
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -192,10 +193,10 @@ func (l *Logger) Close() error {
 
 		if l.formatter.noColor {
 			summary := fmt.Sprintf("\n=== Summary: %d warnings, %d errors ===\n", warnings, errors)
-			fmt.Fprint(os.Stdout, summary)
+			_, _ = fmt.Fprint(os.Stdout, summary)
 		} else {
 			summary := fmt.Sprintf("\n%s=== Summary: %d warnings, %d errors ===%s\n", summaryColor, warnings, errors, ColorReset)
-			fmt.Fprint(os.Stdout, summary)
+			_, _ = fmt.Fprint(os.Stdout, summary)
 		}
 	}
 

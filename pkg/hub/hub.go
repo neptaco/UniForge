@@ -47,7 +47,7 @@ func NewClient() *Client {
 
 func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
 	if c.hubPath == "" {
-		return nil, fmt.Errorf("Unity Hub not found")
+		return nil, fmt.Errorf("unity hub not found")
 	}
 
 	cmd := exec.Command(c.hubPath, "--", "--headless", "editors", "-i")
@@ -68,7 +68,7 @@ func (c *Client) InstallEditor(version string, modules []string) error {
 
 func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 	if c.hubPath == "" {
-		return fmt.Errorf("Unity Hub not found")
+		return fmt.Errorf("unity hub not found")
 	}
 
 	args := []string{"--", "--headless", "install", "--version", options.Version}
@@ -284,7 +284,7 @@ func (c *Client) GetInstallPath() (string, error) {
 	// Return cached value if already initialized
 	if c.installPathInit {
 		if c.installPath == "" {
-			return "", fmt.Errorf("Unity Hub install path not available")
+			return "", fmt.Errorf("unity hub install path not available")
 		}
 		return c.installPath, nil
 	}
@@ -316,7 +316,7 @@ func (c *Client) GetInstallPath() (string, error) {
 
 	// If defaults don't work, query Unity Hub
 	if c.hubPath == "" {
-		return "", fmt.Errorf("Unity Hub not found")
+		return "", fmt.Errorf("unity hub not found")
 	}
 
 	ui.Debug("Querying Unity Hub for install path")
@@ -427,7 +427,7 @@ func (c *Client) getDefaultInstallPaths() []string {
 
 func (c *Client) ListAvailableReleases() ([]ReleaseInfo, error) {
 	if c.hubPath == "" {
-		return nil, fmt.Errorf("Unity Hub not found")
+		return nil, fmt.Errorf("unity hub not found")
 	}
 
 	cmd := exec.Command(c.hubPath, "--", "--headless", "editors", "-r")

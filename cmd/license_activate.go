@@ -114,7 +114,7 @@ func getEditorPath(version string) (string, error) {
 			return "", fmt.Errorf("failed to check editor installation: %w", err)
 		}
 		if !installed {
-			return "", fmt.Errorf("Unity %s is not installed", version)
+			return "", fmt.Errorf("unity %s is not installed", version)
 		}
 		return path, nil
 	}

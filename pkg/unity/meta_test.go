@@ -315,12 +315,12 @@ func TestExtractGUID(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create temp file: %v", err)
 			}
-			defer os.Remove(tempFile.Name())
+			defer func() { _ = os.Remove(tempFile.Name()) }()
 
 			if _, err := tempFile.WriteString(tt.content); err != nil {
 				t.Fatalf("Failed to write temp file: %v", err)
 			}
-			tempFile.Close()
+			_ = tempFile.Close()
 
 			got, err := extractGUID(tempFile.Name())
 			if (err != nil) != tt.wantErr {

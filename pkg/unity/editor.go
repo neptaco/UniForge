@@ -47,7 +47,7 @@ func (e *Editor) GetPath() (string, error) {
 	// Fallback: try Hub CLI to list installed editors
 	editors, err := hubClient.ListInstalledEditors()
 	if err != nil {
-		return "", fmt.Errorf("Unity Editor %s not found. Install path: %s, Hub error: %w", e.Version, installPath, err)
+		return "", fmt.Errorf("unity editor %s not found. install path: %s, hub error: %w", e.Version, installPath, err)
 	}
 
 	for _, editor := range editors {
@@ -57,7 +57,7 @@ func (e *Editor) GetPath() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Unity Editor %s not found. Please install it using: uniforge editor install %s", e.Version, e.Version)
+	return "", fmt.Errorf("unity editor %s not found, please install it using: uniforge editor install %s", e.Version, e.Version)
 }
 
 func fileExists(path string) bool {

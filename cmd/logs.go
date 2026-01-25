@@ -143,7 +143,7 @@ func followLog(logPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher: %w", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	// Watch the directory (to detect file recreation)
 	dir := logPath[:len(logPath)-len("/"+logPath[len(logPath)-len("Editor.log"):])]
@@ -164,7 +164,7 @@ func followLog(logPath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Create a ticker for polling (as backup for platforms where fsnotify may not work perfectly)
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -185,7 +185,7 @@ func followLog(logPath string) error {
 			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
 				// If file was recreated, reopen it
 				if event.Has(fsnotify.Create) && event.Name == logPath {
-					file.Close()
+					_ = file.Close()
 					time.Sleep(100 * time.Millisecond) // Wait for file to be ready
 					file, offset, err = openAndSeekToEnd(logPath)
 					if err != nil {
@@ -213,7 +213,7 @@ func followLog(logPath string) error {
 			if err != nil {
 				// File might have been recreated
 				if _, statErr := os.Stat(logPath); statErr == nil {
-					file.Close()
+					_ = file.Close()
 					file, _, err = openAndSeekToEnd(logPath)
 					if err != nil {
 						ui.Debug("Failed to reopen file", "error", err)
@@ -245,7 +245,7 @@ func openAndSeekToEnd(path string) (*os.File, int64, error) {
 	// Seek to end
 	offset, err := file.Seek(0, io.SeekEnd)
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, 0, fmt.Errorf("failed to seek to end: %w", err)
 	}
 
@@ -328,7 +328,7 @@ func showLog(logPath string, lines int) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Read all lines into a buffer
 	var allLines []string
