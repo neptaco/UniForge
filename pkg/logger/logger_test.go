@@ -345,6 +345,16 @@ func TestFormatterNoisePriority(t *testing.T) {
 			line:     "NullReferenceException: Object reference not set to an instance of an object",
 			expected: LogLevelError,
 		},
+		{
+			name:     "WebGL settings output is not error",
+			line:     "Error: WebGL Exception Support: ExplicitlyThrownExceptionsOnly",
+			expected: LogLevelNormal,
+		},
+		{
+			name:     "Unity abort_threads shutdown message is not error",
+			line:     "Error: abort_threads: Failed aborting id: 000000000015C20, mono_thread_manage will ignore it",
+			expected: LogLevelNormal,
+		},
 	}
 
 	for _, tt := range tests {
