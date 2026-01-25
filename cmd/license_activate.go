@@ -21,22 +21,27 @@ var (
 var licenseActivateCmd = &cobra.Command{
 	Use:   "activate",
 	Short: "Activate Unity license",
-	Long: `Activate Unity license using serial key.
+	Long: `Activate Unity license.
+
+For Personal license, only username and password are required.
+For Plus/Pro license, serial key is also required.
 
 Credentials can be provided via flags or environment variables:
   UNITY_USERNAME  - Unity ID email
   UNITY_PASSWORD  - Password
-  UNITY_SERIAL    - Serial key
+  UNITY_SERIAL    - Serial key (required for Plus/Pro only)
 
 Examples:
-  # Activate using environment variables
+  # Activate Personal license (no serial needed)
+  export UNITY_USERNAME=user@example.com
+  export UNITY_PASSWORD=password
+  uniforge license activate
+
+  # Activate Plus/Pro license (serial required)
   export UNITY_USERNAME=user@example.com
   export UNITY_PASSWORD=password
   export UNITY_SERIAL=XXXX-XXXX-XXXX-XXXX
   uniforge license activate
-
-  # Activate using flags (not recommended - visible in shell history)
-  uniforge license activate -u user@example.com -p password -s XXXX-XXXX-XXXX-XXXX
 
   # Specify Unity version
   uniforge license activate --version 2022.3.10f1`,
@@ -48,7 +53,7 @@ func init() {
 
 	licenseActivateCmd.Flags().StringVarP(&licenseUsername, "username", "u", "", "Unity ID email (or UNITY_USERNAME env)")
 	licenseActivateCmd.Flags().StringVarP(&licensePassword, "password", "p", "", "Password (or UNITY_PASSWORD env)")
-	licenseActivateCmd.Flags().StringVarP(&licenseSerial, "serial", "s", "", "Serial key (or UNITY_SERIAL env)")
+	licenseActivateCmd.Flags().StringVarP(&licenseSerial, "serial", "s", "", "Serial key for Plus/Pro license (or UNITY_SERIAL env)")
 	licenseActivateCmd.Flags().StringVar(&licenseVersion, "version", "", "Unity version to use for activation")
 	licenseActivateCmd.Flags().IntVar(&licenseTimeout, "timeout", 300, "Timeout in seconds")
 }
@@ -71,9 +76,7 @@ func runLicenseActivate(cmd *cobra.Command, args []string) error {
 	if password == "" {
 		return fmt.Errorf("password is required (use --password or UNITY_PASSWORD env)")
 	}
-	if serial == "" {
-		return fmt.Errorf("serial key is required (use --serial or UNITY_SERIAL env)")
-	}
+	// Note: serial is optional for Personal license, required for Plus/Pro
 
 	// Get Unity Editor path
 	editorPath, err := getEditorPath(licenseVersion)
@@ -81,7 +84,11 @@ func runLicenseActivate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ui.Info("Activating Unity license...")
+	if serial != "" {
+		ui.Info("Activating Unity license (Plus/Pro)...")
+	} else {
+		ui.Info("Activating Unity license (Personal)...")
+	}
 	ui.Muted("Using editor: %s", editorPath)
 
 	manager := license.NewManager(editorPath, licenseTimeout)
