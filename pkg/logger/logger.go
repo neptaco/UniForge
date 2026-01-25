@@ -133,11 +133,9 @@ func (l *Logger) processLine(line string) {
 }
 
 func (l *Logger) processLineCIMode(line string, level LogLevel, noiseCategory NoiseCategory) {
-	// Filter stack traces in CI mode (non-project stack traces)
+	// Hide all stack traces in CI mode
 	if level == LogLevelStackTrace {
-		if !l.formatter.IsProjectStackTrace(line) {
-			return // Hide non-project stack traces
-		}
+		return
 	}
 
 	// Handle noise grouping
@@ -160,9 +158,6 @@ func (l *Logger) processLineCIMode(line string, level LogLevel, noiseCategory No
 		_, _ = fmt.Fprintf(os.Stdout, "::error::%s\n", line)
 	case LogLevelWarning:
 		_, _ = fmt.Fprintf(os.Stdout, "::warning::%s\n", line)
-	case LogLevelStackTrace:
-		// Project stack trace - show it
-		_, _ = fmt.Fprintln(os.Stdout, line)
 	default:
 		_, _ = fmt.Fprintln(os.Stdout, line)
 	}

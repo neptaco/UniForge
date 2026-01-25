@@ -279,6 +279,21 @@ func TestFormatterGetNoiseCategory(t *testing.T) {
 			line:     "Error: Something went wrong",
 			expected: NoiseCategoryNone,
 		},
+		{
+			name:     "Asset Pipeline Refresh",
+			line:     "Application.AssetDatabase Initial Refresh Start",
+			expected: NoiseCategoryAssetImport,
+		},
+		{
+			name:     "Shader compilation",
+			line:     "Compiling shader 'Hidden/BlitCopy'",
+			expected: NoiseCategoryShader,
+		},
+		{
+			name:     "Mesh data optimization",
+			line:     "Compiling mesh data optimization",
+			expected: NoiseCategoryShader,
+		},
 	}
 
 	for _, tt := range tests {
@@ -313,6 +328,21 @@ func TestFormatterNoisePriority(t *testing.T) {
 		{
 			name:     "Real error without noise pattern",
 			line:     "Error: Build failed",
+			expected: LogLevelError,
+		},
+		{
+			name:     "Exception in filename is not error",
+			line:     " 0.1 kb     0.0% Packages/com.unity.purchasing/Runtime/Purchasing/Core/Exceptions/StoreCreationException.cs",
+			expected: LogLevelNormal,
+		},
+		{
+			name:     "Build size report with Exception path is not error",
+			line:     "Error:  0.1 kb     0.0% Packages/com.unity.purchasing/Runtime/Purchasing/Core/Exceptions/StoreCreationException.cs",
+			expected: LogLevelNormal,
+		},
+		{
+			name:     "Real exception is error",
+			line:     "NullReferenceException: Object reference not set to an instance of an object",
 			expected: LogLevelError,
 		},
 	}

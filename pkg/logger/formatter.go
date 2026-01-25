@@ -94,14 +94,16 @@ func NewFormatter(opts ...FormatterOption) *Formatter {
 type NoiseCategory string
 
 const (
-	NoiseCategoryNone       NoiseCategory = ""
-	NoiseCategoryLicensing  NoiseCategory = "Unity Licensing"
-	NoiseCategoryPackage    NoiseCategory = "Package Manager"
-	NoiseCategoryMemory     NoiseCategory = "Memory Configuration"
-	NoiseCategoryAssembly   NoiseCategory = "Assembly Reload"
-	NoiseCategoryGRPC       NoiseCategory = "Unity ILPP"
-	NoiseCategorySubsystems NoiseCategory = "Subsystems"
-	NoiseCategoryOther      NoiseCategory = "Unity Internal"
+	NoiseCategoryNone        NoiseCategory = ""
+	NoiseCategoryLicensing   NoiseCategory = "Unity Licensing"
+	NoiseCategoryPackage     NoiseCategory = "Package Manager"
+	NoiseCategoryMemory      NoiseCategory = "Memory Configuration"
+	NoiseCategoryAssembly    NoiseCategory = "Assembly Reload"
+	NoiseCategoryGRPC        NoiseCategory = "Unity ILPP"
+	NoiseCategorySubsystems  NoiseCategory = "Subsystems"
+	NoiseCategoryAssetImport NoiseCategory = "Asset Pipeline"
+	NoiseCategoryShader      NoiseCategory = "Shader Compilation"
+	NoiseCategoryOther       NoiseCategory = "Unity Internal"
 )
 
 // noiseCategoryPatterns maps patterns to their categories
@@ -135,6 +137,22 @@ var noiseCategoryPatterns = map[NoiseCategory][]string{
 	NoiseCategorySubsystems: {
 		"[Subsystems]",
 	},
+	NoiseCategoryAssetImport: {
+		"Application.AssetDatabase",
+		"Refresh: detecting",
+		"Refresh: elidable",
+		"Refresh: creating",
+		"Refresh: merging",
+		"Refresh: done importing",
+		"Refresh completed in",
+		"Asset Pipeline Refresh",
+		"[ScriptCompilation]",
+	},
+	NoiseCategoryShader: {
+		"Compiling shader",
+		"Compiling mesh data optimization",
+		"Shader warmup",
+	},
 }
 
 // Noise patterns - things we want to dim (uncategorized)
@@ -147,8 +165,6 @@ var noisePatterns = []string{
 	"Preloading",
 	"GI:",
 	"Initialize engine version",
-	"Compiling shader",
-	"Shader warmup",
 	"UnloadTime:",
 	"DisplayProgressbar:",
 	"Native extension for",
@@ -178,10 +194,17 @@ var noisePatterns = []string{
 // Error patterns
 var errorPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\berror\b`),
-	regexp.MustCompile(`(?i)exception\b`),
+	regexp.MustCompile(`(?i)exception[:\s]`),    // Exception followed by : or space (not in filenames)
+	regexp.MustCompile(`(?i)Exception$`),        // Exception at end of line
 	regexp.MustCompile(`(?i)\bfailed\b`),
 	regexp.MustCompile(`(?i)^error CS\d+`),
 	regexp.MustCompile(`(?i)^Assets/.*\.cs\(\d+,\d+\):\s*error`),
+}
+
+// Patterns that should NOT be treated as errors (false positive exclusions)
+var notErrorPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\d+\.?\d*\s*kb\s+\d+\.?\d*%`), // Build size report lines like "0.1 kb 0.0%"
+	regexp.MustCompile(`Exception\.cs`),               // Files named *Exception.cs
 }
 
 // Warning patterns
@@ -250,10 +273,20 @@ func (f *Formatter) ClassifyLine(line string) LogLevel {
 		}
 	}
 
-	// Check for error
+	// Check for error (but exclude false positives)
 	for _, pattern := range errorPatterns {
 		if pattern.MatchString(trimmed) {
-			return LogLevelError
+			// Check if it's a false positive
+			isFalsePositive := false
+			for _, notPattern := range notErrorPatterns {
+				if notPattern.MatchString(trimmed) {
+					isFalsePositive = true
+					break
+				}
+			}
+			if !isFalsePositive {
+				return LogLevelError
+			}
 		}
 	}
 

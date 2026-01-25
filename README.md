@@ -105,7 +105,7 @@ The `--ci` flag optimizes output for CI/CD environments:
 
 - **GitHub Actions annotations**: Errors and warnings are prefixed with `::error::` and `::warning::` for inline display
 - **Log grouping**: Verbose logs (Licensing, Package Manager, Assembly Reload, etc.) are collapsed into expandable groups
-- **Stack trace filtering**: Non-project stack traces (Unity/System internals) are hidden, showing only project-related traces
+- **Stack trace filtering**: All stack traces are hidden to reduce noise
 
 ### Run Tests
 
