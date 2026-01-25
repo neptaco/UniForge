@@ -95,20 +95,12 @@ func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 		if len(moduleList) > 0 {
 			args = append(args, "--module")
 			args = append(args, moduleList...)
+			// Add --childModules flag to automatically install child modules (e.g., android-open-jdk)
+			args = append(args, "--childModules")
 		}
 	}
 
-	ui.Debug("Installing Unity Editor", "command", c.hubPath, "args", strings.Join(args, " "))
-
-	cmd := exec.Command(c.hubPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install Unity Editor: %w", err)
-	}
-
-	return nil
+	return c.executeHubCommand("Installing Unity Editor", "install Unity Editor", args)
 }
 
 func (c *Client) detectArchitecture() string {
@@ -516,19 +508,30 @@ func (c *Client) parseEditorsList(output string) ([]EditorInfo, error) {
 	return editors, nil
 }
 
-func (c *Client) mapModules(modules []string) []string {
-	moduleMap := map[string]string{
-		"android":        "android",
-		"ios":            "ios",
-		"webgl":          "webgl",
-		"windows":        "windows-il2cpp",
-		"linux":          "linux-il2cpp",
-		"mac":            "mac-il2cpp",
-		"documentation":  "documentation",
-		"standardassets": "standardassets",
-		"example":        "example",
-	}
+// moduleMap maps user-friendly module names to Unity Hub CLI module IDs
+var moduleMap = map[string]string{
+	"android":        "android",
+	"ios":            "ios",
+	"webgl":          "webgl",
+	"windows":        "windows-il2cpp",
+	"linux":          "linux-il2cpp",
+	"mac":            "mac-il2cpp",
+	"documentation":  "documentation",
+	"standardassets": "standardassets",
+	"example":        "example",
+}
 
+// modulePathMap maps Unity Hub CLI module IDs to PlaybackEngines directory names
+var modulePathMap = map[string]string{
+	"android":        "AndroidPlayer",
+	"ios":            "iOSSupport",
+	"webgl":          "WebGLSupport",
+	"windows-il2cpp": "WindowsStandaloneSupport",
+	"linux-il2cpp":   "LinuxStandaloneSupport",
+	"mac-il2cpp":     "MacStandaloneSupport",
+}
+
+func (c *Client) mapModules(modules []string) []string {
 	var mapped []string
 	for _, module := range modules {
 		if mappedModule, ok := moduleMap[strings.ToLower(module)]; ok {
@@ -539,6 +542,105 @@ func (c *Client) mapModules(modules []string) []string {
 	}
 
 	return mapped
+}
+
+// GetPlaybackEnginesPath returns the PlaybackEngines directory path for an editor
+func (c *Client) GetPlaybackEnginesPath(editorPath string) string {
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: PlaybackEngines is at the same level as Unity.app
+		// e.g., /Applications/Unity/Hub/Editor/2022.3.60f1/PlaybackEngines/
+		baseDir := editorPath
+		if strings.HasSuffix(editorPath, ".app") {
+			baseDir = filepath.Dir(editorPath)
+		}
+		return filepath.Join(baseDir, "PlaybackEngines")
+	case "windows":
+		// Windows: C:\Program Files\Unity\Hub\Editor\2022.3.60f1\Editor\Data\PlaybackEngines
+		if strings.HasSuffix(editorPath, ".exe") {
+			// editorPath is Unity.exe, go up to Editor, then Data/PlaybackEngines
+			return filepath.Join(filepath.Dir(editorPath), "Data", "PlaybackEngines")
+		}
+		// editorPath is the version directory
+		return filepath.Join(editorPath, "Editor", "Data", "PlaybackEngines")
+	case "linux":
+		// Linux: similar to Windows
+		return filepath.Join(editorPath, "Editor", "Data", "PlaybackEngines")
+	}
+	return ""
+}
+
+// IsModuleInstalled checks if a specific module is installed for an editor
+func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
+	// Map user-friendly name to Hub CLI module ID first
+	moduleID := module
+	if mapped, ok := moduleMap[strings.ToLower(module)]; ok {
+		moduleID = mapped
+	}
+
+	// Get the directory name for this module
+	dirName, ok := modulePathMap[moduleID]
+	if !ok {
+		ui.Debug("Unknown module for path check", "module", module)
+		return false
+	}
+
+	playbackEnginesPath := c.GetPlaybackEnginesPath(editorPath)
+	modulePath := filepath.Join(playbackEnginesPath, dirName)
+
+	exists := fileExists(modulePath)
+	ui.Debug("Module check", "module", module, "path", modulePath, "exists", exists)
+	return exists
+}
+
+// GetMissingModules returns a list of modules that are not installed
+func (c *Client) GetMissingModules(editorPath string, modules []string) []string {
+	var missing []string
+	for _, module := range modules {
+		if !c.IsModuleInstalled(editorPath, module) {
+			missing = append(missing, module)
+		}
+	}
+	return missing
+}
+
+// InstallModules installs additional modules to an existing editor
+func (c *Client) InstallModules(version string, modules []string) error {
+	if c.hubPath == "" {
+		return fmt.Errorf("unity hub not found")
+	}
+
+	if len(modules) == 0 {
+		return nil
+	}
+
+	args := []string{"--", "--headless", "install-modules", "--version", version}
+
+	moduleList := c.mapModules(modules)
+	if len(moduleList) > 0 {
+		args = append(args, "--module")
+		args = append(args, moduleList...)
+	}
+
+	// Add --childModules flag to automatically install child modules (e.g., android-open-jdk)
+	args = append(args, "--childModules")
+
+	return c.executeHubCommand("Installing modules", "install modules", args)
+}
+
+// executeHubCommand runs a Unity Hub CLI command with the given arguments
+func (c *Client) executeHubCommand(debugMsg, operation string, args []string) error {
+	ui.Debug(debugMsg, "command", c.hubPath, "args", strings.Join(args, " "))
+
+	cmd := exec.Command(c.hubPath, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to %s: %w", operation, err)
+	}
+
+	return nil
 }
 
 func findUnityHub() string {

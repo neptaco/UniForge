@@ -71,6 +71,9 @@ uniforge editor install 2022.3.10f1 --modules ios,android
 
 # Install from project (auto-detect version)
 uniforge editor install -p ./MyUnityProject
+
+# Add modules to existing editor (only installs missing modules)
+uniforge editor install 2022.3.10f1 --modules webgl
 ```
 
 ### Open/Close Unity Editor
