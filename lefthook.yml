@@ -1,0 +1,22 @@
+# lefthook.yml - Git hooks configuration
+# Install: go install github.com/evilmartians/lefthook@latest && lefthook install
+
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      glob: "*.go"
+      run: go fmt ./...
+      stage_fixed: true
+    vet:
+      glob: "*.go"
+      run: go vet ./...
+    lint:
+      glob: "*.go"
+      run: golangci-lint run ./...
+
+pre-push:
+  parallel: true
+  commands:
+    test:
+      run: go test ./...

@@ -60,13 +60,28 @@ tasks:
   lint:
     desc: Run linters
     cmds:
-      - golangci-lint run ./...
+      - cmd: golangci-lint run ./...
+        ignore_error: true
 
   fmt:
     desc: Format code
     cmds:
       - go fmt ./...
-      - goimports -w .
+      - cmd: goimports -w .
+        ignore_error: true
+
+  check:
+    desc: Run all checks (fmt, vet, lint, test)
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
 
   clean:
     desc: Clean build artifacts
