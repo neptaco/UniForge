@@ -38,8 +38,6 @@ type Formatter struct {
 	hideAllStackTraces bool     // Hide all stack traces completely
 	maxLineLength      int      // Max line length before truncation (0 = no limit)
 	projectPaths       []string // Paths to keep in stack traces (e.g., "Assets/")
-	inStackTrace       bool
-	stackTraceBuffer   []string
 }
 
 // FormatterOption configures a Formatter

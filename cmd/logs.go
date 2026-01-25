@@ -214,7 +214,7 @@ func followLog(logPath string) error {
 				// File might have been recreated
 				if _, statErr := os.Stat(logPath); statErr == nil {
 					file.Close()
-					file, offset, err = openAndSeekToEnd(logPath)
+					file, _, err = openAndSeekToEnd(logPath)
 					if err != nil {
 						ui.Debug("Failed to reopen file", "error", err)
 					}
