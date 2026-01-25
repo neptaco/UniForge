@@ -1,6 +1,6 @@
 ---
 name: commit-conventions
-description: このプロジェクトのコミットメッセージ規約。コミット時に自動参照される。
+description: コミットメッセージの規約。git commit、コミット作成時に参照。feat/fix/chore/ci の使い分けを定義。
 user-invocable: false
 ---
 
