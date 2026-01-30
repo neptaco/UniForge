@@ -195,6 +195,19 @@ uniforge project open my-game
 cd $(uniforge project path my-game)
 ```
 
+#### Shell Integration (fzf)
+
+Add to your `.zshrc` or `.bashrc`:
+
+```bash
+# cd to Unity project with fzf
+ucd() {
+  local project
+  project=$(uniforge project list --format=tsv | fzf --delimiter='\t' --with-nth=1,2 | cut -f4)
+  [ -n "$project" ] && cd "$project"
+}
+```
+
 ### Open/Close Unity Editor
 
 ```bash
