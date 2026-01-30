@@ -139,7 +139,50 @@ uniforge editor install 2022.3.10f1 --modules ios,android
 
 # List installed Unity Editors
 uniforge editor list
+
+# List available versions (for scripting)
+uniforge editor available --lts --latest --format json
 ```
+
+#### Available Versions
+
+The `editor available` command supports various filters and output formats for scripting:
+
+```bash
+# Table format (default for TTY)
+uniforge editor available
+
+# JSON format for scripting
+uniforge editor available --format json
+
+# LTS versions only
+uniforge editor available --lts
+
+# Filter by major version
+uniforge editor available --major 6000
+
+# Latest version per stream
+uniforge editor available --latest
+
+# Show only not installed versions
+uniforge editor available --not-installed
+
+# Count matching versions
+uniforge editor available --lts --count
+
+# Combine filters
+uniforge editor available --major 2022 --lts --latest --format tsv
+```
+
+**Options:**
+- `--format <table|json|tsv>`: Output format (auto-detected based on TTY)
+- `--lts`: Show only LTS versions
+- `--stream <name>`: Filter by stream (LTS, TECH, BETA, ALPHA)
+- `--major <version>`: Filter by major version (e.g., 6000, 2022)
+- `--installed`: Show only installed versions
+- `--not-installed`: Show only not installed versions
+- `--latest`: Show only latest version per major version
+- `--count`: Output count only
 
 #### Interactive TUI
 
