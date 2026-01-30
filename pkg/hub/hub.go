@@ -21,6 +21,7 @@ type Client struct {
 	installPath          string // Cache for install path
 	installPathInit      bool   // Whether install path has been initialized
 	projectsFileOverride string // For testing: override projects file path
+	NoCache              bool   // Skip reading from cache (still writes to cache)
 }
 
 type EditorInfo struct {

@@ -8,6 +8,7 @@ import (
 	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -23,15 +24,18 @@ var editorInstallCmd = &cobra.Command{
 	Short: "Install Unity Editor version",
 	Long: `Install a specific Unity Editor version with optional modules.
 You can specify a version directly or let it detect from a Unity project.
-If no version is specified, it will try to detect from the current directory.
+If no version is specified and not in a Unity project, launches interactive TUI.
 
 If the editor is already installed:
   - Without --modules: skips installation (use --force to reinstall)
   - With --modules: checks if modules are installed and adds missing ones
 
 Examples:
-  # Install from current directory's project
+  # Interactive mode - select version and modules from TUI
   uniforge editor install
+
+  # Install from current directory's project
+  uniforge editor install -p .
 
   # Install specific version
   uniforge editor install 2022.3.10f1
@@ -52,7 +56,7 @@ Examples:
 func init() {
 	editorCmd.AddCommand(editorInstallCmd)
 
-	editorInstallCmd.Flags().StringVarP(&installProject, "project", "p", ".", "Path to Unity project")
+	editorInstallCmd.Flags().StringVarP(&installProject, "project", "p", "", "Path to Unity project (enables project detection mode)")
 	editorInstallCmd.Flags().StringVar(&installModules, "modules", "", "Comma-separated list of modules to install (e.g., ios,android)")
 	editorInstallCmd.Flags().StringVar(&installChangeset, "changeset", "", "Changeset for versions not in release list")
 	editorInstallCmd.Flags().StringVar(&installArchitecture, "architecture", "", "Architecture to install (x86_64 or arm64, auto-detect if not specified)")
@@ -63,19 +67,19 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	var version string
 	var changeset string
 
+	hubClient := hub.NewClient()
+	hubClient.NoCache = viper.GetBool("no-cache")
+
 	if len(args) > 0 {
 		// Version specified as positional argument
 		version = args[0]
-	} else {
-		// Try to detect from project
+	} else if installProject != "" {
+		// Project path specified - detect from project
 		ui.Debug("Detecting Unity version from project", "path", installProject)
 
 		project, err := unity.LoadProject(installProject)
 		if err != nil {
-			if installProject != "." {
-				return fmt.Errorf("failed to load project: %w", err)
-			}
-			return fmt.Errorf("no version specified and current directory is not a Unity project: %w", err)
+			return fmt.Errorf("failed to load project: %w", err)
 		}
 
 		version = project.UnityVersion
@@ -86,14 +90,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			changeset = project.Changeset
 			ui.Muted("Detected changeset: %s", changeset)
 		}
+	} else {
+		// No version and no project specified - launch interactive TUI
+		return hub.RunEditorInstallTUI(hubClient)
 	}
 
 	// Override with flag if provided
 	if installChangeset != "" {
 		changeset = installChangeset
 	}
-
-	hubClient := hub.NewClient()
 
 	// Parse modules early so we can check if they're installed
 	modules := []string{}

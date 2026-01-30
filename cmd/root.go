@@ -38,6 +38,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.uniforge.yaml)")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output")
+	rootCmd.PersistentFlags().Bool("no-cache", false, "skip reading from cache (still writes to cache)")
 
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 
@@ -47,6 +48,10 @@ func init() {
 	}
 	if err := viper.BindPFlag("no-color", rootCmd.PersistentFlags().Lookup("no-color")); err != nil {
 		ui.Error("Failed to bind no-color flag: %v", err)
+		os.Exit(1)
+	}
+	if err := viper.BindPFlag("no-cache", rootCmd.PersistentFlags().Lookup("no-cache")); err != nil {
+		ui.Error("Failed to bind no-cache flag: %v", err)
 		os.Exit(1)
 	}
 }
