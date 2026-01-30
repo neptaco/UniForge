@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/mattn/go-isatty"
 	"github.com/neptaco/uniforge/pkg/hub"
 	"github.com/neptaco/uniforge/pkg/ui"
@@ -17,6 +18,15 @@ var (
 	projectListFormat   string
 	projectListPathOnly bool
 	projectListNoGit    bool
+
+	// Table styles
+	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75"))
+	nameStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
+	versionStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("43"))
+	gitCleanStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	gitDirtyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	pathStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	noGitStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 var projectListCmd = &cobra.Command{
@@ -147,19 +157,45 @@ func printProjectsTSV(projects []hub.ProjectInfo) error {
 }
 
 func printProjectsTable(projects []hub.ProjectInfo) error {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-
-	_, _ = fmt.Fprintln(w, "NAME\tVERSION\tGIT\tPATH")
-	_, _ = fmt.Fprintln(w, "----\t-------\t---\t----")
-
+	rows := make([][]string, 0, len(projects))
 	for _, p := range projects {
-		gitInfo := formatGitInfo(p.GitBranch, p.GitStatus)
-		// Truncate path for display
 		displayPath := truncatePath(p.Path, 50)
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.Title, p.Version, gitInfo, displayPath)
+		rows = append(rows, []string{p.Title, p.Version, formatGitInfo(p.GitBranch, p.GitStatus), displayPath})
 	}
 
-	return w.Flush()
+	t := table.New().
+		Headers("NAME", "VERSION", "GIT", "PATH").
+		Rows(rows...).
+		Border(lipgloss.HiddenBorder()).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			switch col {
+			case 0:
+				return nameStyle
+			case 1:
+				return versionStyle
+			case 2:
+				return gitColumnStyle(rows[row][col])
+			case 3:
+				return pathStyle
+			}
+			return lipgloss.NewStyle()
+		})
+
+	fmt.Println(t)
+	return nil
+}
+
+func gitColumnStyle(status string) lipgloss.Style {
+	if status == "—" {
+		return noGitStyle
+	}
+	if strings.Contains(status, "(+0,-0)") {
+		return gitCleanStyle
+	}
+	return gitDirtyStyle
 }
 
 func formatGitInfo(branch, status string) string {
