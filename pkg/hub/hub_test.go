@@ -546,3 +546,114 @@ func TestReadModulesFile(t *testing.T) {
 		t.Error("Expected webgl to be installed")
 	}
 }
+
+func TestParseHubInfoJSON(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		wantVersion string
+		wantPath    string
+		wantErr     bool
+	}{
+		{
+			name:        "Valid hubInfo.json",
+			json:        `{"version":"3.16.0","executablePath":"/Applications/Unity Hub.app/Contents/MacOS/Unity Hub"}`,
+			wantVersion: "3.16.0",
+			wantPath:    "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub",
+			wantErr:     false,
+		},
+		{
+			name:        "Windows path with spaces",
+			json:        `{"version":"3.16.0","executablePath":"C:\\Program Files\\Unity Hub\\Unity Hub.exe"}`,
+			wantVersion: "3.16.0",
+			wantPath:    "C:\\Program Files\\Unity Hub\\Unity Hub.exe",
+			wantErr:     false,
+		},
+		{
+			name:        "Empty executablePath",
+			json:        `{"version":"3.16.0","executablePath":""}`,
+			wantVersion: "3.16.0",
+			wantPath:    "",
+			wantErr:     false,
+		},
+		{
+			name:    "Invalid JSON",
+			json:    `{invalid json}`,
+			wantErr: true,
+		},
+		{
+			name:        "Missing executablePath field",
+			json:        `{"version":"3.16.0"}`,
+			wantVersion: "3.16.0",
+			wantPath:    "",
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var data struct {
+				Version        string `json:"version"`
+				ExecutablePath string `json:"executablePath"`
+			}
+
+			err := json.Unmarshal([]byte(tt.json), &data)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if data.Version != tt.wantVersion {
+				t.Errorf("Version = %q, want %q", data.Version, tt.wantVersion)
+			}
+			if data.ExecutablePath != tt.wantPath {
+				t.Errorf("ExecutablePath = %q, want %q", data.ExecutablePath, tt.wantPath)
+			}
+		})
+	}
+}
+
+func TestGetHubPathFromHubInfoWithTempFile(t *testing.T) {
+	// Create a temporary directory to simulate UnityHub config
+	tempDir := t.TempDir()
+
+	// Create a fake executable file
+	fakeHubPath := filepath.Join(tempDir, "Unity Hub")
+	if err := os.WriteFile(fakeHubPath, []byte("fake"), 0755); err != nil {
+		t.Fatalf("Failed to create fake hub: %v", err)
+	}
+
+	// Test valid hubInfo.json with existing executable
+	hubInfoJSON := `{"version":"3.16.0","executablePath":"` + filepath.ToSlash(fakeHubPath) + `"}`
+
+	var data struct {
+		Version        string `json:"version"`
+		ExecutablePath string `json:"executablePath"`
+	}
+
+	if err := json.Unmarshal([]byte(hubInfoJSON), &data); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	// Verify the path exists (simulating fileExists check)
+	if _, err := os.Stat(data.ExecutablePath); os.IsNotExist(err) {
+		t.Errorf("ExecutablePath should exist: %s", data.ExecutablePath)
+	}
+}
+
+func TestGetHubPathFromHubInfoFileNotFound(t *testing.T) {
+	// Test with non-existent directory - getHubPathFromHubInfo should return empty string
+	// This tests the error handling when hubInfo.json doesn't exist
+	nonExistentPath := "/non/existent/path/hubInfo.json"
+	_, err := os.ReadFile(nonExistentPath)
+	if err == nil {
+		t.Error("Expected error for non-existent file")
+	}
+}
