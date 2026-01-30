@@ -1,13 +1,16 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/neptaco/uniforge/pkg/ui"
@@ -781,15 +784,42 @@ func (c *Client) InstallModules(version string, modules []string) error {
 func (c *Client) executeHubCommand(debugMsg, operation string, args []string) error {
 	ui.Debug(debugMsg, "command", c.hubPath, "args", strings.Join(args, " "))
 
-	cmd := exec.Command(c.hubPath, args...)
+	// Create context that cancels on SIGINT/SIGTERM
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Set up signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
+
+	cmd := exec.CommandContext(ctx, c.hubPath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to %s: %w", operation, err)
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start %s: %w", operation, err)
 	}
 
-	return nil
+	// Wait for either command completion or signal
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("failed to %s: %w", operation, err)
+		}
+		return nil
+	case sig := <-sigChan:
+		ui.Muted("\nReceived %s, stopping Unity Hub...", sig)
+		cancel() // This will send SIGKILL to the process
+		<-done   // Wait for process to exit
+		return fmt.Errorf("interrupted by %s", sig)
+	}
 }
 
 func findUnityHub() string {
