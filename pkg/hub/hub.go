@@ -219,7 +219,7 @@ func (c *Client) getEditorInstallPaths() []string {
 		paths = append(paths, filepath.Join(os.Getenv("ProgramFiles"), "Unity", "Hub", "Editor"))
 		// Also check secondary common location
 		if drive := os.Getenv("SystemDrive"); drive != "" {
-			paths = append(paths, filepath.Join(drive, "\\Unity", "Hub", "Editor"))
+			paths = append(paths, filepath.Join(drive, "Unity", "Hub", "Editor"))
 		}
 	case "linux":
 		paths = append(paths, filepath.Join(os.Getenv("HOME"), "Unity", "Hub", "Editor"))
