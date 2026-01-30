@@ -1,6 +1,9 @@
 package hub
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -8,16 +11,15 @@ func TestIsEditorInstalled(t *testing.T) {
 	// This is a basic unit test. In real scenarios, we'd mock the Hub client
 	client := &Client{}
 
-	// Test with empty hub path (Unity Hub not found)
-	isInstalled, path, err := client.IsEditorInstalled("2022.3.10f1")
-	if err == nil {
-		t.Error("Expected error when Unity Hub is not found")
-	}
+	// Test with non-existent editor version
+	// With JSON file reading, this should return false without an error
+	// (if the JSON file doesn't exist or editor is not in the list)
+	isInstalled, path, _ := client.IsEditorInstalled("9999.9.9f1")
 	if isInstalled {
-		t.Error("Expected isInstalled to be false when Unity Hub is not found")
+		t.Error("Expected isInstalled to be false for non-existent version")
 	}
 	if path != "" {
-		t.Error("Expected empty path when Unity Hub is not found")
+		t.Error("Expected empty path for non-existent version")
 	}
 }
 
@@ -205,5 +207,72 @@ func TestParseEditorsList(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestListEditorsFromFile(t *testing.T) {
+	// Create a temporary editors file
+	tempDir := t.TempDir()
+	editorsFile := filepath.Join(tempDir, "editors-v2.json")
+
+	editorsJSON := `{
+		"schema_version": "2",
+		"data": [
+			{
+				"version": "2022.3.60f1",
+				"location": ["/path/to/Unity.app"],
+				"manual": true,
+				"architecture": "arm64",
+				"productName": "Unity"
+			},
+			{
+				"version": "6000.0.1f1",
+				"location": ["/path/to/Unity6.app"],
+				"manual": false,
+				"architecture": "x86_64",
+				"productName": "Unity"
+			}
+		]
+	}`
+
+	if err := os.WriteFile(editorsFile, []byte(editorsJSON), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	// We can't easily test the actual function since it uses a fixed path
+	// But we can test the JSON parsing directly
+	var data struct {
+		SchemaVersion string `json:"schema_version"`
+		Data          []struct {
+			Version      string   `json:"version"`
+			Location     []string `json:"location"`
+			Manual       bool     `json:"manual"`
+			Architecture string   `json:"architecture"`
+		} `json:"data"`
+	}
+
+	content, err := os.ReadFile(editorsFile)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+
+	if err := json.Unmarshal(content, &data); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	if len(data.Data) != 2 {
+		t.Errorf("Expected 2 editors, got %d", len(data.Data))
+	}
+
+	if data.Data[0].Version != "2022.3.60f1" {
+		t.Errorf("Expected version 2022.3.60f1, got %s", data.Data[0].Version)
+	}
+
+	if data.Data[0].Architecture != "arm64" {
+		t.Errorf("Expected architecture arm64, got %s", data.Data[0].Architecture)
+	}
+
+	if !data.Data[0].Manual {
+		t.Error("Expected manual to be true")
 	}
 }

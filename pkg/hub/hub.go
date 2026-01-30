@@ -21,10 +21,12 @@ type Client struct {
 }
 
 type EditorInfo struct {
-	Version   string
-	Path      string
-	Modules   []string
-	Changeset string // Changeset from Unity executable
+	Version      string
+	Path         string
+	Modules      []string
+	Changeset    string // Changeset from Unity executable
+	Architecture string // arm64, x86_64, etc.
+	Manual       bool   // Whether it was manually added
 }
 
 type ReleaseInfo struct {
@@ -47,10 +49,19 @@ func NewClient() *Client {
 }
 
 func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
+	// Try to read from editors-v2.json first (faster)
+	editors, err := c.listEditorsFromFile()
+	if err == nil && len(editors) > 0 {
+		ui.Debug("Loaded editors from editors-v2.json", "count", len(editors))
+		return editors, nil
+	}
+
+	// Fallback to Unity Hub CLI
 	if c.hubPath == "" {
 		return nil, fmt.Errorf("unity hub not found")
 	}
 
+	ui.Debug("Falling back to Unity Hub CLI for editor list")
 	cmd := exec.Command(c.hubPath, "--", "--headless", "editors", "-i")
 	output, err := cmd.Output()
 	if err != nil {
@@ -58,6 +69,76 @@ func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
 	}
 
 	return c.parseEditorsList(string(output))
+}
+
+// editorsFileData represents the structure of editors-v2.json
+type editorsFileData struct {
+	SchemaVersion string            `json:"schema_version"`
+	Data          []editorFileEntry `json:"data"`
+}
+
+type editorFileEntry struct {
+	Version      string   `json:"version"`
+	Location     []string `json:"location"`
+	Manual       bool     `json:"manual"`
+	Architecture string   `json:"architecture"`
+	ProductName  string   `json:"productName"`
+}
+
+// listEditorsFromFile reads installed editors from Unity Hub's editors-v2.json
+func (c *Client) listEditorsFromFile() ([]EditorInfo, error) {
+	editorsFilePath := c.getEditorsFilePath()
+	if editorsFilePath == "" {
+		return nil, fmt.Errorf("could not determine editors file path")
+	}
+
+	data, err := os.ReadFile(editorsFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []EditorInfo{}, nil
+		}
+		return nil, fmt.Errorf("failed to read editors file: %w", err)
+	}
+
+	var editorsData editorsFileData
+	if err := json.Unmarshal(data, &editorsData); err != nil {
+		return nil, fmt.Errorf("failed to parse editors file: %w", err)
+	}
+
+	var result []EditorInfo
+	for _, entry := range editorsData.Data {
+		path := ""
+		if len(entry.Location) > 0 {
+			path = entry.Location[0]
+		}
+
+		result = append(result, EditorInfo{
+			Version:      entry.Version,
+			Path:         path,
+			Architecture: entry.Architecture,
+			Manual:       entry.Manual,
+		})
+	}
+
+	return result, nil
+}
+
+// getEditorsFilePath returns the path to Unity Hub's editors-v2.json
+func (c *Client) getEditorsFilePath() string {
+	var basePath string
+
+	switch runtime.GOOS {
+	case "darwin":
+		basePath = filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "UnityHub")
+	case "windows":
+		basePath = filepath.Join(os.Getenv("APPDATA"), "UnityHub")
+	case "linux":
+		basePath = filepath.Join(os.Getenv("HOME"), ".config", "UnityHub")
+	default:
+		return ""
+	}
+
+	return filepath.Join(basePath, "editors-v2.json")
 }
 
 func (c *Client) InstallEditor(version string, modules []string) error {
