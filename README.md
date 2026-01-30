@@ -116,7 +116,7 @@ Download the latest release from [GitHub Releases](https://github.com/neptaco/un
 uniforge editor install
 
 # Install from project (auto-detect version)
-uniforge editor install .
+uniforge editor install -p .
 
 # Install specific version
 uniforge editor install 2022.3.10f1
@@ -250,6 +250,16 @@ uniforge logs -f
 
 # Show with timestamps
 uniforge logs -f -t
+```
+
+### Manage Release Cache
+
+```bash
+# Clear cached Unity release information
+uniforge cache clear
+
+# Skip cache when fetching releases (still writes to cache)
+uniforge editor install --no-cache
 ```
 
 ### Manage Unity License
