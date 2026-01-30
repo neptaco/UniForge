@@ -44,8 +44,9 @@ Examples:
 
   # Add modules to existing editor (only installs missing modules)
   uniforge editor install 2022.3.10f1 --modules webgl`,
-	Args: cobra.MaximumNArgs(1),
-	RunE: runInstall,
+	Args:         cobra.MaximumNArgs(1),
+	RunE:         runInstall,
+	SilenceUsage: true,
 }
 
 func init() {
