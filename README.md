@@ -103,6 +103,19 @@ scoop install uniforge
 
 Download the latest release from [GitHub Releases](https://github.com/neptaco/uniforge/releases).
 
+### Shell Completion
+
+```bash
+# zsh (~/.zshrc)
+eval "$(uniforge completion zsh)"
+
+# bash (~/.bashrc)
+eval "$(uniforge completion bash)"
+
+# fish
+uniforge completion fish | source
+```
+
 ## Prerequisites
 
 - Unity Hub installed
