@@ -302,15 +302,27 @@ Default locations:
 
 ## Development
 
+### Prerequisites
+
+- [Go](https://go.dev/) 1.24+
+- [Task](https://taskfile.dev/) - Task runner
+
+### Setup
+
 ```bash
-# Build
-task build
+# Clone and setup (installs tools and git hooks)
+git clone https://github.com/neptaco/uniforge.git
+cd uniforge
+task setup
+```
 
-# Test
-task test
+### Commands
 
-# Lint
-task lint
+```bash
+task build    # Build
+task test     # Run tests
+task lint     # Run linters
+task check    # Run all checks (fmt, vet, lint, test)
 ```
 
 ## License
