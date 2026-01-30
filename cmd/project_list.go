@@ -167,7 +167,7 @@ func formatGitInfo(branch, status string) string {
 		return "—"
 	}
 
-	if status == "" || status == "clean" {
+	if status == "" {
 		return branch
 	}
 

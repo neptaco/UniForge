@@ -94,8 +94,11 @@ type projectModel struct {
 	status        string
 	quitting      bool
 	loading       bool
+	launching     bool   // true when launching Unity/editor
+	launchMsg     string // message to show while launching
 	err           error
 	openProjectFn OpenProjectFunc
+	editorName    string // detected editor name for help display
 }
 
 type projectsLoadedMsg struct {
@@ -112,6 +115,7 @@ func initialProjectModel(openFn OpenProjectFunc) projectModel {
 	return projectModel{
 		loading:       true,
 		openProjectFn: openFn,
+		editorName:    getExternalEditor(),
 	}
 }
 
@@ -134,12 +138,15 @@ func (m projectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionDoneMsg:
+		m.launching = false
 		if msg.err != nil {
 			m.status = fmt.Sprintf("Error: %s", msg.err)
-		} else {
-			m.status = msg.message
+			return m, nil
 		}
-		return m, nil
+		// Success - quit TUI and show message
+		m.status = msg.message
+		m.quitting = true
+		return m, tea.Quit
 
 	case tea.KeyMsg:
 		if m.loading {
@@ -157,11 +164,17 @@ func (m projectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, keys.Enter):
 			if len(m.projects) > 0 {
-				return m, openInUnity(m.projects[m.cursor], m.openProjectFn)
+				p := m.projects[m.cursor]
+				m.launching = true
+				m.launchMsg = fmt.Sprintf("Starting Unity %s for %s...", p.Version, p.Title)
+				return m, openInUnity(p, m.openProjectFn)
 			}
 		case key.Matches(msg, keys.Editor):
 			if len(m.projects) > 0 {
-				return m, openInEditor(m.projects[m.cursor])
+				p := m.projects[m.cursor]
+				m.launching = true
+				m.launchMsg = fmt.Sprintf("Opening %s in editor...", p.Title)
+				return m, openInEditor(p)
 			}
 		case key.Matches(msg, keys.CopyPath):
 			if len(m.projects) > 0 {
@@ -177,7 +190,14 @@ func (m projectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m projectModel) View() string {
 	if m.quitting {
+		if m.status != "" {
+			return statusStyle.Render(m.status) + "\n"
+		}
 		return ""
+	}
+
+	if m.launching {
+		return m.launchMsg + "\n"
 	}
 
 	if m.loading {
@@ -197,6 +217,22 @@ func (m projectModel) View() string {
 	b.WriteString(titleStyle.Render("Unity Hub Projects"))
 	b.WriteString("\n")
 
+	// Calculate max widths for alignment
+	maxTitleLen := 0
+	maxVersionLen := 0
+	maxBranchLen := 0
+	for _, p := range m.projects {
+		if len(p.Title) > maxTitleLen {
+			maxTitleLen = len(p.Title)
+		}
+		if len(p.Version) > maxVersionLen {
+			maxVersionLen = len(p.Version)
+		}
+		if len(p.GitBranch) > maxBranchLen {
+			maxBranchLen = len(p.GitBranch)
+		}
+	}
+
 	for i, p := range m.projects {
 		cursor := "  "
 		style := normalStyle
@@ -205,22 +241,25 @@ func (m projectModel) View() string {
 			style = selectedStyle
 		}
 
-		// Project name
-		line := cursor + style.Render(p.Title)
+		// Project name (padded)
+		title := p.Title + strings.Repeat(" ", maxTitleLen-len(p.Title))
+		line := cursor + style.Render(title)
 
-		// Version
-		line += "  " + versionStyle.Render(p.Version)
+		// Version (padded)
+		version := p.Version + strings.Repeat(" ", maxVersionLen-len(p.Version))
+		line += "  " + versionStyle.Render(version)
 
-		// Git info
+		// Git info (padded)
 		if p.GitBranch != "" {
-			line += "  " + gitBranchStyle.Render(p.GitBranch)
-			if p.GitStatus != "" && p.GitStatus != "clean" {
+			branch := p.GitBranch + strings.Repeat(" ", maxBranchLen-len(p.GitBranch))
+			line += "  " + gitBranchStyle.Render(branch)
+			if p.GitStatus == "+0,-0" {
+				line += " " + gitCleanStyle.Render("("+p.GitStatus+")")
+			} else {
 				line += " " + gitDirtyStyle.Render("("+p.GitStatus+")")
-			} else if p.GitStatus == "clean" {
-				line += " " + gitCleanStyle.Render("(clean)")
 			}
 		} else {
-			line += "  " + versionStyle.Render("—")
+			line += "  " + versionStyle.Render(strings.Repeat(" ", maxBranchLen)+"—")
 		}
 
 		b.WriteString(line + "\n")
@@ -233,7 +272,8 @@ func (m projectModel) View() string {
 	}
 
 	// Help
-	help := helpStyle.Render("[Enter] Unity  [e] Editor  [p] Copy path  [q] Quit")
+	editorLabel := strings.ToUpper(m.editorName[:1]) + m.editorName[1:] // Capitalize
+	help := helpStyle.Render(fmt.Sprintf("[Enter] Unity  [e] %s  [p] Copy path  [q] Quit", editorLabel))
 	b.WriteString(help)
 
 	return b.String()
@@ -275,17 +315,19 @@ func copyPath(p ProjectInfo) tea.Cmd {
 }
 
 func getExternalEditor() string {
+	// Explicit override
 	if editor := os.Getenv("UNIFORGE_EDITOR"); editor != "" {
 		return editor
 	}
-	if editor := os.Getenv("EDITOR"); editor != "" {
-		return editor
-	}
-	// Fallback: use first available editor
+	// Auto-detect Unity-friendly IDEs (preferred for Unity projects)
 	for _, cmd := range []string{"rider", "cursor", "code"} {
 		if isCommandAvailable(cmd) {
 			return cmd
 		}
+	}
+	// Fallback to general EDITOR
+	if editor := os.Getenv("EDITOR"); editor != "" {
+		return editor
 	}
 	return "code"
 }

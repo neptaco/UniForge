@@ -221,30 +221,35 @@ func (c *Client) getProjectsFilePath() string {
 
 // fillGitInfo populates Git branch and status information for a project
 func (c *Client) fillGitInfo(project *ProjectInfo) {
-	gitDir := filepath.Join(project.Path, ".git")
-	if !fileExists(gitDir) {
+	// Check if inside a git repository (works for subdirectories too)
+	cmd := exec.Command("git", "-C", project.Path, "rev-parse", "--is-inside-work-tree")
+	if output, err := cmd.Output(); err != nil || strings.TrimSpace(string(output)) != "true" {
 		project.GitBranch = ""
 		project.GitStatus = ""
 		return
 	}
 
 	// Get current branch
-	cmd := exec.Command("git", "-C", project.Path, "rev-parse", "--abbrev-ref", "HEAD")
+	cmd = exec.Command("git", "-C", project.Path, "rev-parse", "--abbrev-ref", "HEAD")
 	if output, err := cmd.Output(); err == nil {
 		project.GitBranch = strings.TrimSpace(string(output))
 	}
 
-	// Get status
-	cmd = exec.Command("git", "-C", project.Path, "status", "--porcelain")
+	// Get line changes with git diff --numstat
+	var added, deleted int
+	cmd = exec.Command("git", "-C", project.Path, "diff", "--numstat")
 	if output, err := cmd.Output(); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-		if len(lines) == 1 && lines[0] == "" {
-			project.GitStatus = "clean"
-		} else {
-			uncommitted := len(lines)
-			project.GitStatus = fmt.Sprintf("%d uncommitted", uncommitted)
+		for _, line := range strings.Split(string(output), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				a, _ := strconv.Atoi(fields[0])
+				d, _ := strconv.Atoi(fields[1])
+				added += a
+				deleted += d
+			}
 		}
 	}
+	project.GitStatus = fmt.Sprintf("+%d,-%d", added, deleted)
 
 	// Check ahead/behind
 	cmd = exec.Command("git", "-C", project.Path, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
@@ -256,17 +261,12 @@ func (c *Client) fillGitInfo(project *ProjectInfo) {
 			if ahead > 0 || behind > 0 {
 				var status []string
 				if ahead > 0 {
-					status = append(status, fmt.Sprintf("%d ahead", ahead))
+					status = append(status, fmt.Sprintf("%d↑", ahead))
 				}
 				if behind > 0 {
-					status = append(status, fmt.Sprintf("%d behind", behind))
+					status = append(status, fmt.Sprintf("%d↓", behind))
 				}
-				// Combine with existing status
-				if project.GitStatus == "clean" {
-					project.GitStatus = strings.Join(status, ", ")
-				} else {
-					project.GitStatus = project.GitStatus + ", " + strings.Join(status, ", ")
-				}
+				project.GitStatus = project.GitStatus + " " + strings.Join(status, " ")
 			}
 		}
 	}
