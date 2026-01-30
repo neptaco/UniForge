@@ -48,7 +48,7 @@ type InstallOptions struct {
 // moduleFileEntry represents an entry in modules.json
 type moduleFileEntry struct {
 	ID          string `json:"id"`
-	IsInstalled bool   `json:"isInstalled"`
+	IsInstalled *bool  `json:"isInstalled"` // pointer to detect null vs false
 }
 
 func NewClient() *Client {
@@ -837,24 +837,24 @@ func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
 		moduleID = mapped
 	}
 
-	// Try to read from modules.json first (more accurate)
+	// Try to read from modules.json first
 	modules, err := c.readModulesFile(editorPath)
 	if err == nil {
 		for _, m := range modules {
 			if m.ID == moduleID {
-				ui.Debug("Module check from modules.json", "module", module, "id", moduleID, "installed", m.IsInstalled)
-				return m.IsInstalled
+				// If isInstalled is explicitly set, use that value
+				if m.IsInstalled != nil {
+					ui.Debug("Module check from modules.json", "module", module, "id", moduleID, "installed", *m.IsInstalled)
+					return *m.IsInstalled
+				}
+				// isInstalled is null, fall through to directory check
+				ui.Debug("Module isInstalled is null, checking directory", "module", module, "id", moduleID)
+				break
 			}
 		}
-		// Module not found in modules.json, assume not installed
-		ui.Debug("Module not found in modules.json", "module", module, "id", moduleID)
-		return false
 	}
 
-	// Fallback to directory check if modules.json is not available
-	ui.Debug("Falling back to directory check for module", "module", module, "error", err)
-
-	// Get the directory name for this module
+	// Fallback to directory check
 	dirName, ok := modulePathMap[moduleID]
 	if !ok {
 		ui.Debug("Unknown module for path check", "module", module)
@@ -865,7 +865,7 @@ func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
 	modulePath := filepath.Join(playbackEnginesPath, dirName)
 
 	exists := fileExists(modulePath)
-	ui.Debug("Module check", "module", module, "path", modulePath, "exists", exists)
+	ui.Debug("Module check by directory", "module", module, "path", modulePath, "exists", exists)
 	return exists
 }
 
