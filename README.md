@@ -112,8 +112,11 @@ Download the latest release from [GitHub Releases](https://github.com/neptaco/un
 ### Manage Unity Editor
 
 ```bash
-# Install from project (auto-detect version)
+# Interactive TUI (when no version specified)
 uniforge editor install
+
+# Install from project (auto-detect version)
+uniforge editor install -p .
 
 # Install specific version
 uniforge editor install 2022.3.10f1
@@ -124,6 +127,15 @@ uniforge editor install 2022.3.10f1 --modules ios,android
 # List installed Unity Editors
 uniforge editor list
 ```
+
+#### Interactive TUI
+
+When running `uniforge editor install` without arguments, an interactive TUI is launched:
+
+- **Stream selection**: Browse available Unity versions by stream (LTS, Tech, Beta)
+- **Version search**: Type version number (e.g., `2022.3.`) to filter
+- **Module selection**: Choose platform modules to install
+- **Ctrl+l**: View installed versions with project counts for module updates
 
 ### Run Unity in Batch Mode
 
@@ -238,6 +250,16 @@ uniforge logs -f
 
 # Show with timestamps
 uniforge logs -f -t
+```
+
+### Manage Release Cache
+
+```bash
+# Clear cached Unity release information
+uniforge cache clear
+
+# Skip cache when fetching releases (still writes to cache)
+uniforge editor install --no-cache
 ```
 
 ### Manage Unity License
