@@ -14,9 +14,10 @@ import (
 )
 
 type Client struct {
-	hubPath         string
-	installPath     string // Cache for install path
-	installPathInit bool   // Whether install path has been initialized
+	hubPath              string
+	installPath          string // Cache for install path
+	installPathInit      bool   // Whether install path has been initialized
+	projectsFileOverride string // For testing: override projects file path
 }
 
 type EditorInfo struct {

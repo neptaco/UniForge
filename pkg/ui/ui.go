@@ -4,6 +4,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -199,4 +200,112 @@ func StartSpinner(message string) func(success bool, resultMsg string) {
 			Error("%s", resultMsg)
 		}
 	}
+}
+
+// SelectOption represents an option in a selection list
+type SelectOption struct {
+	Label       string
+	Description string
+	Value       any
+}
+
+// selectModel is the bubbletea model for selection UI
+type selectModel struct {
+	title    string
+	options  []SelectOption
+	cursor   int
+	selected int
+	quitting bool
+}
+
+func (m selectModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			m.quitting = true
+			m.selected = -1
+			return m, tea.Quit
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.options)-1 {
+				m.cursor++
+			}
+		case "enter":
+			m.selected = m.cursor
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m selectModel) View() string {
+	if m.quitting || m.selected >= 0 {
+		return ""
+	}
+
+	var b strings.Builder
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("75"))
+	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	normalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
+	b.WriteString(titleStyle.Render(m.title))
+	b.WriteString("\n\n")
+
+	for i, opt := range m.options {
+		cursor := "  "
+		style := normalStyle
+		if i == m.cursor {
+			cursor = "> "
+			style = selectedStyle
+		}
+
+		b.WriteString(cursor + style.Render(opt.Label))
+		if opt.Description != "" {
+			b.WriteString("  " + descStyle.Render(opt.Description))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("[↑/↓] move  [enter] select  [q] cancel"))
+
+	return b.String()
+}
+
+// Select displays an interactive selection UI and returns the selected index
+// Returns -1 if cancelled
+func Select(title string, options []SelectOption) int {
+	if !isTTY() {
+		return -1
+	}
+
+	m := selectModel{
+		title:    title,
+		options:  options,
+		cursor:   0,
+		selected: -1,
+	}
+
+	p := tea.NewProgram(m)
+	finalModel, err := p.Run()
+	if err != nil {
+		return -1
+	}
+
+	return finalModel.(selectModel).selected
+}
+
+// IsTTY returns whether stdout is a terminal
+func IsTTY() bool {
+	return isTTY()
 }
