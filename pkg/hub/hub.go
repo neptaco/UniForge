@@ -21,10 +21,12 @@ type Client struct {
 }
 
 type EditorInfo struct {
-	Version   string
-	Path      string
-	Modules   []string
-	Changeset string // Changeset from Unity executable
+	Version      string
+	Path         string
+	Modules      []string
+	Changeset    string // Changeset from Unity executable
+	Architecture string // arm64, x86_64, etc.
+	Manual       bool   // Whether it was manually added
 }
 
 type ReleaseInfo struct {
@@ -40,6 +42,12 @@ type InstallOptions struct {
 	Architecture string
 }
 
+// moduleFileEntry represents an entry in modules.json
+type moduleFileEntry struct {
+	ID          string `json:"id"`
+	IsInstalled bool   `json:"isInstalled"`
+}
+
 func NewClient() *Client {
 	return &Client{
 		hubPath: findUnityHub(),
@@ -47,10 +55,19 @@ func NewClient() *Client {
 }
 
 func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
+	// Try to read from editors-v2.json first (faster)
+	editors, err := c.listEditorsFromFile()
+	if err == nil && len(editors) > 0 {
+		ui.Debug("Loaded editors from editors-v2.json", "count", len(editors))
+		return editors, nil
+	}
+
+	// Fallback to Unity Hub CLI
 	if c.hubPath == "" {
 		return nil, fmt.Errorf("unity hub not found")
 	}
 
+	ui.Debug("Falling back to Unity Hub CLI for editor list")
 	cmd := exec.Command(c.hubPath, "--", "--headless", "editors", "-i")
 	output, err := cmd.Output()
 	if err != nil {
@@ -58,6 +75,76 @@ func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
 	}
 
 	return c.parseEditorsList(string(output))
+}
+
+// editorsFileData represents the structure of editors-v2.json
+type editorsFileData struct {
+	SchemaVersion string            `json:"schema_version"`
+	Data          []editorFileEntry `json:"data"`
+}
+
+type editorFileEntry struct {
+	Version      string   `json:"version"`
+	Location     []string `json:"location"`
+	Manual       bool     `json:"manual"`
+	Architecture string   `json:"architecture"`
+	ProductName  string   `json:"productName"`
+}
+
+// listEditorsFromFile reads installed editors from Unity Hub's editors-v2.json
+func (c *Client) listEditorsFromFile() ([]EditorInfo, error) {
+	editorsFilePath := c.getEditorsFilePath()
+	if editorsFilePath == "" {
+		return nil, fmt.Errorf("could not determine editors file path")
+	}
+
+	data, err := os.ReadFile(editorsFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []EditorInfo{}, nil
+		}
+		return nil, fmt.Errorf("failed to read editors file: %w", err)
+	}
+
+	var editorsData editorsFileData
+	if err := json.Unmarshal(data, &editorsData); err != nil {
+		return nil, fmt.Errorf("failed to parse editors file: %w", err)
+	}
+
+	var result []EditorInfo
+	for _, entry := range editorsData.Data {
+		path := ""
+		if len(entry.Location) > 0 {
+			path = entry.Location[0]
+		}
+
+		result = append(result, EditorInfo{
+			Version:      entry.Version,
+			Path:         path,
+			Architecture: entry.Architecture,
+			Manual:       entry.Manual,
+		})
+	}
+
+	return result, nil
+}
+
+// getEditorsFilePath returns the path to Unity Hub's editors-v2.json
+func (c *Client) getEditorsFilePath() string {
+	var basePath string
+
+	switch runtime.GOOS {
+	case "darwin":
+		basePath = filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "UnityHub")
+	case "windows":
+		basePath = filepath.Join(os.Getenv("APPDATA"), "UnityHub")
+	case "linux":
+		basePath = filepath.Join(os.Getenv("HOME"), ".config", "UnityHub")
+	default:
+		return ""
+	}
+
+	return filepath.Join(basePath, "editors-v2.json")
 }
 
 func (c *Client) InstallEditor(version string, modules []string) error {
@@ -571,6 +658,50 @@ func (c *Client) GetPlaybackEnginesPath(editorPath string) string {
 	return ""
 }
 
+// getModulesFilePath returns the path to modules.json for a given editor
+func (c *Client) getModulesFilePath(editorPath string) string {
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: modules.json is at the same level as Unity.app
+		baseDir := editorPath
+		if strings.HasSuffix(editorPath, ".app") {
+			baseDir = filepath.Dir(editorPath)
+		}
+		return filepath.Join(baseDir, "modules.json")
+	case "windows":
+		// Windows: C:\Program Files\Unity\Hub\Editor\2022.3.60f1\modules.json
+		if strings.HasSuffix(editorPath, ".exe") {
+			// editorPath is Unity.exe, go up to version directory
+			return filepath.Join(filepath.Dir(filepath.Dir(editorPath)), "modules.json")
+		}
+		return filepath.Join(editorPath, "modules.json")
+	case "linux":
+		// Linux: similar structure
+		return filepath.Join(editorPath, "modules.json")
+	}
+	return ""
+}
+
+// readModulesFile reads and parses modules.json
+func (c *Client) readModulesFile(editorPath string) ([]moduleFileEntry, error) {
+	modulesFilePath := c.getModulesFilePath(editorPath)
+	if modulesFilePath == "" {
+		return nil, fmt.Errorf("could not determine modules file path")
+	}
+
+	data, err := os.ReadFile(modulesFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var modules []moduleFileEntry
+	if err := json.Unmarshal(data, &modules); err != nil {
+		return nil, err
+	}
+
+	return modules, nil
+}
+
 // IsModuleInstalled checks if a specific module is installed for an editor
 func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
 	// Map user-friendly name to Hub CLI module ID first
@@ -578,6 +709,23 @@ func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
 	if mapped, ok := moduleMap[strings.ToLower(module)]; ok {
 		moduleID = mapped
 	}
+
+	// Try to read from modules.json first (more accurate)
+	modules, err := c.readModulesFile(editorPath)
+	if err == nil {
+		for _, m := range modules {
+			if m.ID == moduleID {
+				ui.Debug("Module check from modules.json", "module", module, "id", moduleID, "installed", m.IsInstalled)
+				return m.IsInstalled
+			}
+		}
+		// Module not found in modules.json, assume not installed
+		ui.Debug("Module not found in modules.json", "module", module, "id", moduleID)
+		return false
+	}
+
+	// Fallback to directory check if modules.json is not available
+	ui.Debug("Falling back to directory check for module", "module", module, "error", err)
 
 	// Get the directory name for this module
 	dirName, ok := modulePathMap[moduleID]
