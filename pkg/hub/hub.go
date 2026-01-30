@@ -42,6 +42,12 @@ type InstallOptions struct {
 	Architecture string
 }
 
+// moduleFileEntry represents an entry in modules.json
+type moduleFileEntry struct {
+	ID          string `json:"id"`
+	IsInstalled bool   `json:"isInstalled"`
+}
+
 func NewClient() *Client {
 	return &Client{
 		hubPath: findUnityHub(),
@@ -652,6 +658,50 @@ func (c *Client) GetPlaybackEnginesPath(editorPath string) string {
 	return ""
 }
 
+// getModulesFilePath returns the path to modules.json for a given editor
+func (c *Client) getModulesFilePath(editorPath string) string {
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS: modules.json is at the same level as Unity.app
+		baseDir := editorPath
+		if strings.HasSuffix(editorPath, ".app") {
+			baseDir = filepath.Dir(editorPath)
+		}
+		return filepath.Join(baseDir, "modules.json")
+	case "windows":
+		// Windows: C:\Program Files\Unity\Hub\Editor\2022.3.60f1\modules.json
+		if strings.HasSuffix(editorPath, ".exe") {
+			// editorPath is Unity.exe, go up to version directory
+			return filepath.Join(filepath.Dir(filepath.Dir(editorPath)), "modules.json")
+		}
+		return filepath.Join(editorPath, "modules.json")
+	case "linux":
+		// Linux: similar structure
+		return filepath.Join(editorPath, "modules.json")
+	}
+	return ""
+}
+
+// readModulesFile reads and parses modules.json
+func (c *Client) readModulesFile(editorPath string) ([]moduleFileEntry, error) {
+	modulesFilePath := c.getModulesFilePath(editorPath)
+	if modulesFilePath == "" {
+		return nil, fmt.Errorf("could not determine modules file path")
+	}
+
+	data, err := os.ReadFile(modulesFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var modules []moduleFileEntry
+	if err := json.Unmarshal(data, &modules); err != nil {
+		return nil, err
+	}
+
+	return modules, nil
+}
+
 // IsModuleInstalled checks if a specific module is installed for an editor
 func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
 	// Map user-friendly name to Hub CLI module ID first
@@ -659,6 +709,23 @@ func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
 	if mapped, ok := moduleMap[strings.ToLower(module)]; ok {
 		moduleID = mapped
 	}
+
+	// Try to read from modules.json first (more accurate)
+	modules, err := c.readModulesFile(editorPath)
+	if err == nil {
+		for _, m := range modules {
+			if m.ID == moduleID {
+				ui.Debug("Module check from modules.json", "module", module, "id", moduleID, "installed", m.IsInstalled)
+				return m.IsInstalled
+			}
+		}
+		// Module not found in modules.json, assume not installed
+		ui.Debug("Module not found in modules.json", "module", module, "id", moduleID)
+		return false
+	}
+
+	// Fallback to directory check if modules.json is not available
+	ui.Debug("Falling back to directory check for module", "module", module, "error", err)
 
 	// Get the directory name for this module
 	dirName, ok := modulePathMap[moduleID]

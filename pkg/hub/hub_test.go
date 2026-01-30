@@ -276,3 +276,75 @@ func TestListEditorsFromFile(t *testing.T) {
 		t.Error("Expected manual to be true")
 	}
 }
+
+func TestReadModulesFile(t *testing.T) {
+	// Create a temporary directory structure
+	tempDir := t.TempDir()
+	modulesFile := filepath.Join(tempDir, "modules.json")
+
+	modulesJSON := `[
+		{
+			"id": "android",
+			"name": "Android Build Support",
+			"isInstalled": true
+		},
+		{
+			"id": "ios",
+			"name": "iOS Build Support",
+			"isInstalled": false
+		},
+		{
+			"id": "webgl",
+			"name": "WebGL Build Support",
+			"isInstalled": true
+		}
+	]`
+
+	if err := os.WriteFile(modulesFile, []byte(modulesJSON), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	// Test JSON parsing
+	var modules []struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		IsInstalled bool   `json:"isInstalled"`
+	}
+
+	content, err := os.ReadFile(modulesFile)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+
+	if err := json.Unmarshal(content, &modules); err != nil {
+		t.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	if len(modules) != 3 {
+		t.Errorf("Expected 3 modules, got %d", len(modules))
+	}
+
+	// Verify android is installed
+	if modules[0].ID != "android" {
+		t.Errorf("Expected id 'android', got '%s'", modules[0].ID)
+	}
+	if !modules[0].IsInstalled {
+		t.Error("Expected android to be installed")
+	}
+
+	// Verify ios is not installed
+	if modules[1].ID != "ios" {
+		t.Errorf("Expected id 'ios', got '%s'", modules[1].ID)
+	}
+	if modules[1].IsInstalled {
+		t.Error("Expected ios to not be installed")
+	}
+
+	// Verify webgl is installed
+	if modules[2].ID != "webgl" {
+		t.Errorf("Expected id 'webgl', got '%s'", modules[2].ID)
+	}
+	if !modules[2].IsInstalled {
+		t.Error("Expected webgl to be installed")
+	}
+}
