@@ -58,11 +58,37 @@ func NewClient() *Client {
 }
 
 func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
-	// Try to read from editors-v2.json first (faster)
+	// Collect editors from multiple sources
+	editorMap := make(map[string]EditorInfo)
+
+	// 1. Read from editors-v2.json
 	editors, err := c.listEditorsFromFile()
-	if err == nil && len(editors) > 0 {
+	if err == nil {
+		for _, e := range editors {
+			editorMap[e.Version] = e
+		}
 		ui.Debug("Loaded editors from editors-v2.json", "count", len(editors))
-		return editors, nil
+	}
+
+	// 2. Scan secondaryInstallPath directory
+	secondaryEditors, err := c.scanSecondaryInstallPath()
+	if err == nil {
+		for _, e := range secondaryEditors {
+			if _, exists := editorMap[e.Version]; !exists {
+				editorMap[e.Version] = e
+			}
+		}
+		ui.Debug("Scanned secondary install path", "count", len(secondaryEditors))
+	}
+
+	// Convert map to slice
+	var result []EditorInfo
+	for _, e := range editorMap {
+		result = append(result, e)
+	}
+
+	if len(result) > 0 {
+		return result, nil
 	}
 
 	// Fallback to Unity Hub CLI
@@ -134,20 +160,118 @@ func (c *Client) listEditorsFromFile() ([]EditorInfo, error) {
 
 // getEditorsFilePath returns the path to Unity Hub's editors-v2.json
 func (c *Client) getEditorsFilePath() string {
-	var basePath string
+	return filepath.Join(c.getUnityHubBasePath(), "editors-v2.json")
+}
 
+// getUnityHubBasePath returns the base path for Unity Hub configuration files
+func (c *Client) getUnityHubBasePath() string {
 	switch runtime.GOOS {
 	case "darwin":
-		basePath = filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "UnityHub")
+		return filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "UnityHub")
 	case "windows":
-		basePath = filepath.Join(os.Getenv("APPDATA"), "UnityHub")
+		return filepath.Join(os.Getenv("APPDATA"), "UnityHub")
 	case "linux":
-		basePath = filepath.Join(os.Getenv("HOME"), ".config", "UnityHub")
+		return filepath.Join(os.Getenv("HOME"), ".config", "UnityHub")
 	default:
 		return ""
 	}
+}
 
-	return filepath.Join(basePath, "editors-v2.json")
+// getSecondaryInstallPath reads the secondary install path from Unity Hub configuration
+func (c *Client) getSecondaryInstallPath() string {
+	basePath := c.getUnityHubBasePath()
+	if basePath == "" {
+		return ""
+	}
+
+	data, err := os.ReadFile(filepath.Join(basePath, "secondaryInstallPath.json"))
+	if err != nil {
+		return ""
+	}
+
+	// The file contains a quoted path, e.g., "/path/to/editors"
+	var path string
+	if err := json.Unmarshal(data, &path); err != nil {
+		return ""
+	}
+
+	return path
+}
+
+// scanSecondaryInstallPath scans the secondary install path for Unity editors
+func (c *Client) scanSecondaryInstallPath() ([]EditorInfo, error) {
+	installPath := c.getSecondaryInstallPath()
+	if installPath == "" {
+		return nil, fmt.Errorf("no secondary install path configured")
+	}
+
+	entries, err := os.ReadDir(installPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read secondary install path: %w", err)
+	}
+
+	var result []EditorInfo
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		// Check if this looks like a Unity version directory (e.g., 2022.3.60f1)
+		version := entry.Name()
+		if !isValidUnityVersion(version) {
+			continue
+		}
+
+		// Check if Unity.app exists (macOS) or Unity.exe (Windows)
+		var editorPath string
+		switch runtime.GOOS {
+		case "darwin":
+			editorPath = filepath.Join(installPath, version, "Unity.app")
+		case "windows":
+			editorPath = filepath.Join(installPath, version, "Editor", "Unity.exe")
+		case "linux":
+			editorPath = filepath.Join(installPath, version, "Editor", "Unity")
+		}
+
+		if _, err := os.Stat(editorPath); err != nil {
+			continue
+		}
+
+		result = append(result, EditorInfo{
+			Version:      version,
+			Path:         editorPath,
+			Architecture: runtime.GOARCH,
+		})
+	}
+
+	return result, nil
+}
+
+// isValidUnityVersion checks if a string looks like a Unity version
+func isValidUnityVersion(s string) bool {
+	// Unity versions look like: 2022.3.60f1, 6000.3.3f1, etc.
+	// Format: YEAR.MINOR.PATCH[a|b|f|p|x]REVISION
+	if len(s) < 8 {
+		return false
+	}
+
+	// Check for at least 2 dots
+	dotCount := 0
+	for _, c := range s {
+		if c == '.' {
+			dotCount++
+		}
+	}
+	if dotCount < 2 {
+		return false
+	}
+
+	// Check if first character is a digit
+	if s[0] < '0' || s[0] > '9' {
+		return false
+	}
+
+	return true
 }
 
 func (c *Client) InstallEditor(version string, modules []string) error {
