@@ -8,6 +8,7 @@ Command-line tool for Unity CI/CD automation. Build Unity projects for multiple 
 - 🖥️ **Cross-platform** - Same commands work on macOS, Windows, Linux
 - 🧪 **Test Runner** - Run EditMode/PlayMode tests with XML results
 - 📦 **Editor management** - Install Unity versions via Unity Hub CLI
+- 📁 **Project management** - Browse and open Unity Hub projects with TUI or CLI
 - 📋 **Meta file check** - Detect missing .meta files and duplicate GUIDs
 - 🔑 **License management** - Activate/return licenses for CI runners
 
@@ -173,11 +174,48 @@ uniforge meta check ./MyProject --fix
 uniforge meta check ./MyProject --fix --force
 ```
 
+### Manage Unity Hub Projects
+
+```bash
+# Interactive TUI (when in terminal)
+uniforge project
+
+# List all registered projects
+uniforge project list
+
+# List in different formats
+uniforge project list --format=json
+uniforge project list --format=tsv
+uniforge project list --path-only
+
+# Open project by name (partial match supported)
+uniforge project open my-game
+
+# Get project path (for shell scripts)
+cd $(uniforge project path my-game)
+```
+
+#### Shell Integration (fzf)
+
+Add to your `.zshrc` or `.bashrc`:
+
+```bash
+# cd to Unity project with fzf
+ucd() {
+  local project
+  project=$(uniforge project list --format=tsv | fzf --delimiter='\t' --with-nth=1,2 | cut -f4)
+  [ -n "$project" ] && cd "$project"
+}
+```
+
 ### Open/Close Unity Editor
 
 ```bash
-# Open Unity Editor with a project
+# Open Unity Editor with a project path
 uniforge open ./MyProject
+
+# Open by project name (searches Unity Hub projects)
+uniforge open my-game
 
 # Close running Unity Editor
 uniforge close ./MyProject
@@ -241,6 +279,7 @@ UNITY_SERIAL      # Serial key (Plus/Pro only)
 ```bash
 UNIFORGE_HUB_PATH           # Path to Unity Hub executable
 UNIFORGE_EDITOR_BASE_PATH   # Custom Unity Editor base directory
+UNIFORGE_EDITOR             # External editor for "project" TUI (auto-detect: rider > cursor > code)
 UNIFORGE_LOG_LEVEL          # Log level (debug, info, warn, error)
 UNIFORGE_TIMEOUT            # Default timeout in seconds
 UNIFORGE_NO_COLOR           # Disable colored output
