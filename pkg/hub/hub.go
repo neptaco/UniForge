@@ -947,12 +947,25 @@ func (c *Client) executeHubCommand(debugMsg, operation string, args []string) er
 	}
 }
 
+// hubInfoData represents the structure of hubInfo.json
+type hubInfoData struct {
+	Version        string `json:"version"`
+	ExecutablePath string `json:"executablePath"`
+}
+
 func findUnityHub() string {
+	// 1. Check environment variable first
 	envPath := os.Getenv("UNIFORGE_HUB_PATH")
 	if envPath != "" && fileExists(envPath) {
 		return envPath
 	}
 
+	// 2. Try to read from hubInfo.json
+	if path := getHubPathFromHubInfo(); path != "" {
+		return path
+	}
+
+	// 3. Try default paths
 	paths := getUnityHubPaths()
 	for _, path := range paths {
 		if fileExists(path) {
@@ -961,12 +974,46 @@ func findUnityHub() string {
 		}
 	}
 
+	// 4. Try PATH lookup
 	pathCmd, err := exec.LookPath("Unity Hub")
 	if err == nil {
 		return pathCmd
 	}
 
 	ui.Warn("Unity Hub not found. Please install Unity Hub or set UNIFORGE_HUB_PATH environment variable")
+	return ""
+}
+
+// getHubPathFromHubInfo reads the Unity Hub executable path from hubInfo.json
+func getHubPathFromHubInfo() string {
+	var basePath string
+	switch runtime.GOOS {
+	case "darwin":
+		basePath = filepath.Join(os.Getenv("HOME"), "Library", "Application Support", "UnityHub")
+	case "windows":
+		basePath = filepath.Join(os.Getenv("APPDATA"), "UnityHub")
+	case "linux":
+		basePath = filepath.Join(os.Getenv("HOME"), ".config", "UnityHub")
+	default:
+		return ""
+	}
+
+	hubInfoPath := filepath.Join(basePath, "hubInfo.json")
+	data, err := os.ReadFile(hubInfoPath)
+	if err != nil {
+		return ""
+	}
+
+	var hubInfo hubInfoData
+	if err := json.Unmarshal(data, &hubInfo); err != nil {
+		return ""
+	}
+
+	if hubInfo.ExecutablePath != "" && fileExists(hubInfo.ExecutablePath) {
+		ui.Debug("Found Unity Hub from hubInfo.json", "path", hubInfo.ExecutablePath)
+		return hubInfo.ExecutablePath
+	}
+
 	return ""
 }
 
