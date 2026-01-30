@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"testing"
 )
 
@@ -274,6 +276,202 @@ func TestListEditorsFromFile(t *testing.T) {
 
 	if !data.Data[0].Manual {
 		t.Error("Expected manual to be true")
+	}
+}
+
+func TestIsValidUnityVersion(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"Valid 2022 version", "2022.3.60f1", true},
+		{"Valid 6000 version", "6000.3.3f1", true},
+		{"Valid alpha version", "2023.1.0a1", true},
+		{"Valid beta version", "2023.1.0b1", true},
+		{"Valid patch version", "2022.3.10p1", true},
+		{"Too short", "2022.3", false},
+		{"No dots", "20223601f", false},
+		{"One dot only", "2022.360f1", false},
+		{"Starts with letter", "v2022.3.60f1", false},
+		{"Empty string", "", false},
+		{"Random text", "notaversion", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidUnityVersion(tt.input)
+			if result != tt.expected {
+				t.Errorf("isValidUnityVersion(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestScanInstallPath(t *testing.T) {
+	client := &Client{}
+
+	// Test with empty path
+	_, err := client.scanInstallPath("")
+	if err == nil {
+		t.Error("Expected error for empty path")
+	}
+
+	// Test with non-existent path
+	_, err = client.scanInstallPath("/non/existent/path")
+	if err == nil {
+		t.Error("Expected error for non-existent path")
+	}
+
+	// Test with valid directory structure
+	tempDir := t.TempDir()
+
+	// Create fake Unity editor directories
+	versions := []string{"2022.3.60f1", "6000.3.3f1", "notaversion"}
+	for _, version := range versions {
+		versionDir := filepath.Join(tempDir, version)
+		if err := os.MkdirAll(versionDir, 0755); err != nil {
+			t.Fatalf("Failed to create version dir: %v", err)
+		}
+
+		// Create fake Unity executable based on OS
+		var editorPath string
+		switch runtime.GOOS {
+		case "windows":
+			editorPath = filepath.Join(versionDir, "Editor", "Unity.exe")
+		case "linux":
+			editorPath = filepath.Join(versionDir, "Editor", "Unity")
+		default: // darwin
+			editorPath = filepath.Join(versionDir, "Unity.app")
+		}
+
+		// Create parent directories and file
+		if err := os.MkdirAll(filepath.Dir(editorPath), 0755); err != nil {
+			t.Fatalf("Failed to create editor dir: %v", err)
+		}
+		if err := os.WriteFile(editorPath, []byte("fake"), 0755); err != nil {
+			t.Fatalf("Failed to create editor file: %v", err)
+		}
+	}
+
+	// Scan the temp directory
+	editors, err := client.scanInstallPath(tempDir)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Should find 2 valid versions (not "notaversion")
+	if len(editors) != 2 {
+		t.Errorf("Expected 2 editors, got %d", len(editors))
+	}
+
+	// Check that the versions are correct
+	versionMap := make(map[string]bool)
+	for _, e := range editors {
+		versionMap[e.Version] = true
+	}
+
+	if !versionMap["2022.3.60f1"] {
+		t.Error("Expected to find version 2022.3.60f1")
+	}
+	if !versionMap["6000.3.3f1"] {
+		t.Error("Expected to find version 6000.3.3f1")
+	}
+	if versionMap["notaversion"] {
+		t.Error("Should not find 'notaversion'")
+	}
+}
+
+func TestScanInstallPathWithSpaces(t *testing.T) {
+	client := &Client{}
+
+	// Test with path containing spaces (common on Windows and macOS)
+	tempDir := t.TempDir()
+	pathWithSpaces := filepath.Join(tempDir, "Unity Hub", "Editor")
+	if err := os.MkdirAll(pathWithSpaces, 0755); err != nil {
+		t.Fatalf("Failed to create path with spaces: %v", err)
+	}
+
+	// Create fake Unity editor directory
+	version := "2022.3.60f1"
+	versionDir := filepath.Join(pathWithSpaces, version)
+	if err := os.MkdirAll(versionDir, 0755); err != nil {
+		t.Fatalf("Failed to create version dir: %v", err)
+	}
+
+	// Create fake Unity executable based on OS
+	var editorPath string
+	switch runtime.GOOS {
+	case "windows":
+		editorPath = filepath.Join(versionDir, "Editor", "Unity.exe")
+	case "linux":
+		editorPath = filepath.Join(versionDir, "Editor", "Unity")
+	default: // darwin
+		editorPath = filepath.Join(versionDir, "Unity.app")
+	}
+
+	// Create parent directories and file
+	if err := os.MkdirAll(filepath.Dir(editorPath), 0755); err != nil {
+		t.Fatalf("Failed to create editor dir: %v", err)
+	}
+	if err := os.WriteFile(editorPath, []byte("fake"), 0755); err != nil {
+		t.Fatalf("Failed to create editor file: %v", err)
+	}
+
+	// Scan the path with spaces
+	editors, err := client.scanInstallPath(pathWithSpaces)
+	if err != nil {
+		t.Fatalf("Unexpected error for path with spaces: %v", err)
+	}
+
+	if len(editors) != 1 {
+		t.Errorf("Expected 1 editor, got %d", len(editors))
+	}
+
+	if len(editors) > 0 && editors[0].Version != version {
+		t.Errorf("Expected version %s, got %s", version, editors[0].Version)
+	}
+
+	// Verify the path is correct (contains spaces)
+	if len(editors) > 0 && editors[0].Path == "" {
+		t.Error("Expected non-empty path")
+	}
+}
+
+func TestGetEditorInstallPaths(t *testing.T) {
+	client := &Client{}
+
+	paths := client.getEditorInstallPaths()
+
+	// Should return at least one path (default install path)
+	if len(paths) == 0 {
+		t.Error("Expected at least one install path")
+	}
+
+	// All paths should be non-empty
+	for i, path := range paths {
+		if path == "" {
+			t.Errorf("Path at index %d is empty", i)
+		}
+	}
+
+	// Verify platform-specific default paths are included
+	switch runtime.GOOS {
+	case "darwin":
+		if !slices.Contains(paths, "/Applications/Unity/Hub/Editor") {
+			t.Error("Expected default macOS path /Applications/Unity/Hub/Editor")
+		}
+	case "windows":
+		// Windows should have at least one Program Files or drive root path
+		if !slices.ContainsFunc(paths, filepath.IsAbs) {
+			t.Error("Expected at least one absolute path on Windows")
+		}
+	case "linux":
+		home := os.Getenv("HOME")
+		expectedPath := filepath.Join(home, "Unity", "Hub", "Editor")
+		if !slices.Contains(paths, expectedPath) {
+			t.Errorf("Expected default Linux path %s", expectedPath)
+		}
 	}
 }
 

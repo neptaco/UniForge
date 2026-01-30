@@ -62,7 +62,7 @@ func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
 	// Collect editors from multiple sources
 	editorMap := make(map[string]EditorInfo)
 
-	// 1. Read from editors-v2.json
+	// 1. Read from editors-v2.json (Unity Hub 3.16+)
 	editors, err := c.listEditorsFromFile()
 	if err == nil {
 		for _, e := range editors {
@@ -71,15 +71,17 @@ func (c *Client) ListInstalledEditors() ([]EditorInfo, error) {
 		ui.Debug("Loaded editors from editors-v2.json", "count", len(editors))
 	}
 
-	// 2. Scan secondaryInstallPath directory
-	secondaryEditors, err := c.scanSecondaryInstallPath()
-	if err == nil {
-		for _, e := range secondaryEditors {
-			if _, exists := editorMap[e.Version]; !exists {
-				editorMap[e.Version] = e
+	// 2. Scan default install paths
+	for _, path := range c.getEditorInstallPaths() {
+		scannedEditors, err := c.scanInstallPath(path)
+		if err == nil {
+			for _, e := range scannedEditors {
+				if _, exists := editorMap[e.Version]; !exists {
+					editorMap[e.Version] = e
+				}
 			}
+			ui.Debug("Scanned install path", "path", path, "count", len(scannedEditors))
 		}
-		ui.Debug("Scanned secondary install path", "count", len(secondaryEditors))
 	}
 
 	// Convert map to slice
@@ -199,16 +201,42 @@ func (c *Client) getSecondaryInstallPath() string {
 	return path
 }
 
-// scanSecondaryInstallPath scans the secondary install path for Unity editors
-func (c *Client) scanSecondaryInstallPath() ([]EditorInfo, error) {
-	installPath := c.getSecondaryInstallPath()
+// getEditorInstallPaths returns all paths where Unity editors might be installed
+func (c *Client) getEditorInstallPaths() []string {
+	var paths []string
+
+	// Secondary install path from Unity Hub settings
+	if secondaryPath := c.getSecondaryInstallPath(); secondaryPath != "" {
+		paths = append(paths, secondaryPath)
+	}
+
+	// Default install paths per platform
+	switch runtime.GOOS {
+	case "darwin":
+		paths = append(paths, "/Applications/Unity/Hub/Editor")
+	case "windows":
+		// Common Windows install locations
+		paths = append(paths, filepath.Join(os.Getenv("ProgramFiles"), "Unity", "Hub", "Editor"))
+		// Also check secondary common location
+		if drive := os.Getenv("SystemDrive"); drive != "" {
+			paths = append(paths, filepath.Join(drive, "Unity", "Hub", "Editor"))
+		}
+	case "linux":
+		paths = append(paths, filepath.Join(os.Getenv("HOME"), "Unity", "Hub", "Editor"))
+	}
+
+	return paths
+}
+
+// scanInstallPath scans a directory for Unity editors
+func (c *Client) scanInstallPath(installPath string) ([]EditorInfo, error) {
 	if installPath == "" {
-		return nil, fmt.Errorf("no secondary install path configured")
+		return nil, fmt.Errorf("empty install path")
 	}
 
 	entries, err := os.ReadDir(installPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read secondary install path: %w", err)
+		return nil, fmt.Errorf("failed to read install path: %w", err)
 	}
 
 	var result []EditorInfo
