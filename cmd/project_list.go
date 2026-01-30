@@ -149,14 +149,14 @@ func printProjectsTSV(projects []hub.ProjectInfo) error {
 func printProjectsTable(projects []hub.ProjectInfo) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintln(w, "NAME\tVERSION\tGIT\tPATH")
-	fmt.Fprintln(w, "----\t-------\t---\t----")
+	_, _ = fmt.Fprintln(w, "NAME\tVERSION\tGIT\tPATH")
+	_, _ = fmt.Fprintln(w, "----\t-------\t---\t----")
 
 	for _, p := range projects {
 		gitInfo := formatGitInfo(p.GitBranch, p.GitStatus)
 		// Truncate path for display
 		displayPath := truncatePath(p.Path, 50)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.Title, p.Version, gitInfo, displayPath)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.Title, p.Version, gitInfo, displayPath)
 	}
 
 	return w.Flush()
