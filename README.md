@@ -363,20 +363,24 @@ UNIFORGE_TIMEOUT            # Default timeout in seconds
 UNIFORGE_NO_COLOR           # Disable colored output
 ```
 
-### Custom Editor Location
+### Editor Location
+
+UniForge automatically detects Unity Editors from:
+- **Unity Hub settings** (Preferences → Installs location)
+- **Default OS paths**:
+  - macOS: `/Applications/Unity/Hub/Editor`
+  - Windows: `C:\Program Files\Unity\Hub\Editor`
+  - Linux: `~/Unity/Hub/Editor`
+
+Use `UNIFORGE_EDITOR_BASE_PATH` only if Unity Hub settings are not detected:
 
 ```bash
-# Example: External SSD (macOS)
+# macOS/Linux
 export UNIFORGE_EDITOR_BASE_PATH=/Volumes/ExternalSSD/Unity/Hub/Editor
 
-# Example: Custom location (Windows)
+# Windows
 set UNIFORGE_EDITOR_BASE_PATH=D:\Unity\Hub\Editor
 ```
-
-Default locations:
-- **macOS**: `/Applications/Unity/Hub/Editor`
-- **Windows**: `C:\Program Files\Unity\Hub\Editor`
-- **Linux**: `~/Unity/Hub/Editor`
 
 ## Development
 
