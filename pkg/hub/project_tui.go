@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/neptaco/uniforge/pkg/ui"
@@ -24,41 +25,36 @@ type keyMap struct {
 
 var keys = keyMap{
 	Up: key.NewBinding(
-		key.WithKeys("up", "k"),
-		key.WithHelp("↑/k", "up"),
+		key.WithKeys("up", "ctrl+k"),
+		key.WithHelp("↑", "up"),
 	),
 	Down: key.NewBinding(
-		key.WithKeys("down", "j"),
-		key.WithHelp("↓/j", "down"),
+		key.WithKeys("down", "ctrl+j"),
+		key.WithHelp("↓", "down"),
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
-		key.WithHelp("enter", "open in Unity"),
+		key.WithHelp("Enter", "open in Unity"),
 	),
 	Editor: key.NewBinding(
-		key.WithKeys("e"),
-		key.WithHelp("e", "open in editor"),
+		key.WithKeys("ctrl+e"),
+		key.WithHelp("^E", "open in editor"),
 	),
 	CopyPath: key.NewBinding(
-		key.WithKeys("p"),
-		key.WithHelp("p", "copy path"),
+		key.WithKeys("ctrl+p"),
+		key.WithHelp("^P", "copy path"),
 	),
 	Quit: key.NewBinding(
-		key.WithKeys("q", "esc", "ctrl+c"),
-		key.WithHelp("q", "quit"),
+		key.WithKeys("esc", "ctrl+c"),
+		key.WithHelp("Esc", "quit"),
 	),
 }
 
 // Styles
 var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("75")).
-			MarginBottom(1)
-
 	selectedStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("212"))
+			Background(lipgloss.Color("237"))
 
 	normalStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("252"))
@@ -75,13 +71,14 @@ var (
 	gitCleanStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245"))
 
-	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			MarginTop(1)
+	counterStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
+
+	promptStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("76"))
 
 	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("42")).
-			MarginTop(1)
+			Foreground(lipgloss.Color("42"))
 )
 
 // OpenProjectFunc is a function type for opening a project in Unity
@@ -90,6 +87,7 @@ type OpenProjectFunc func(path, version string) error
 // projectModel is the bubbletea model for project TUI
 type projectModel struct {
 	projects      []ProjectInfo
+	filtered      []ProjectInfo // filtered projects based on search
 	cursor        int
 	status        string
 	quitting      bool
@@ -99,6 +97,7 @@ type projectModel struct {
 	err           error
 	openProjectFn OpenProjectFunc
 	editorName    string // detected editor name for help display
+	filterInput   textinput.Model
 }
 
 type projectsLoadedMsg struct {
@@ -112,10 +111,17 @@ type actionDoneMsg struct {
 }
 
 func initialProjectModel(openFn OpenProjectFunc) projectModel {
+	ti := textinput.New()
+	ti.Focus()
+	ti.CharLimit = 100
+	ti.Width = 50
+	ti.Prompt = ""
+
 	return projectModel{
 		loading:       true,
 		openProjectFn: openFn,
 		editorName:    getExternalEditor(),
+		filterInput:   ti,
 	}
 }
 
@@ -134,6 +140,7 @@ func (m projectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case projectsLoadedMsg:
 		m.loading = false
 		m.projects = msg.projects
+		m.filtered = msg.projects
 		m.err = msg.err
 		return m, nil
 
@@ -158,34 +165,72 @@ func (m projectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor > 0 {
 				m.cursor--
 			}
+			return m, nil
 		case key.Matches(msg, keys.Down):
-			if m.cursor < len(m.projects)-1 {
+			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
 			}
+			return m, nil
 		case key.Matches(msg, keys.Enter):
-			if len(m.projects) > 0 {
-				p := m.projects[m.cursor]
+			if len(m.filtered) > 0 {
+				p := m.filtered[m.cursor]
 				m.launching = true
 				m.launchMsg = fmt.Sprintf("Starting Unity %s for %s...", p.Version, p.Title)
 				return m, openInUnity(p, m.openProjectFn)
 			}
 		case key.Matches(msg, keys.Editor):
-			if len(m.projects) > 0 {
-				p := m.projects[m.cursor]
+			if len(m.filtered) > 0 {
+				p := m.filtered[m.cursor]
 				m.launching = true
 				m.launchMsg = fmt.Sprintf("Opening %s in editor...", p.Title)
 				return m, openInEditor(p)
 			}
 		case key.Matches(msg, keys.CopyPath):
-			if len(m.projects) > 0 {
-				return m, copyPath(m.projects[m.cursor])
+			if len(m.filtered) > 0 {
+				return m, copyPath(m.filtered[m.cursor])
 			}
+			return m, nil
 		case key.Matches(msg, keys.Quit):
+			// If filter has text, clear it first
+			if m.filterInput.Value() != "" {
+				m.filterInput.SetValue("")
+				m.filtered = m.projects
+				m.cursor = 0
+				return m, nil
+			}
+			// Otherwise quit
 			m.quitting = true
 			return m, tea.Quit
 		}
+
+		// Update text input for filtering
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+
+		// Filter projects based on input
+		m.filtered = m.filterProjects(m.filterInput.Value())
+		// Reset cursor if out of bounds
+		if m.cursor >= len(m.filtered) {
+			m.cursor = max(0, len(m.filtered)-1)
+		}
+		return m, cmd
 	}
 	return m, nil
+}
+
+// filterProjects filters projects by name (case-insensitive)
+func (m projectModel) filterProjects(query string) []ProjectInfo {
+	if query == "" {
+		return m.projects
+	}
+	query = strings.ToLower(query)
+	var result []ProjectInfo
+	for _, p := range m.projects {
+		if strings.Contains(strings.ToLower(p.Title), query) {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 func (m projectModel) View() string {
@@ -214,14 +259,11 @@ func (m projectModel) View() string {
 
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("Unity Hub Projects"))
-	b.WriteString("\n")
-
 	// Calculate max widths for alignment
 	maxTitleLen := 0
 	maxVersionLen := 0
 	maxBranchLen := 0
-	for _, p := range m.projects {
+	for _, p := range m.filtered {
 		if len(p.Title) > maxTitleLen {
 			maxTitleLen = len(p.Title)
 		}
@@ -233,48 +275,50 @@ func (m projectModel) View() string {
 		}
 	}
 
-	for i, p := range m.projects {
-		cursor := "  "
-		style := normalStyle
-		if i == m.cursor {
-			cursor = "> "
-			style = selectedStyle
-		}
-
-		// Project name (padded)
+	// Project list
+	for i, p := range m.filtered {
+		// Build line content
 		title := p.Title + strings.Repeat(" ", maxTitleLen-len(p.Title))
-		line := cursor + style.Render(title)
-
-		// Version (padded)
 		version := p.Version + strings.Repeat(" ", maxVersionLen-len(p.Version))
-		line += "  " + versionStyle.Render(version)
 
-		// Git info (padded)
+		var gitInfo string
 		if p.GitBranch != "" {
 			branch := p.GitBranch + strings.Repeat(" ", maxBranchLen-len(p.GitBranch))
-			line += "  " + gitBranchStyle.Render(branch)
 			if p.GitStatus == "+0,-0" {
-				line += " " + gitCleanStyle.Render("("+p.GitStatus+")")
+				gitInfo = gitBranchStyle.Render(branch) + " " + gitCleanStyle.Render("("+p.GitStatus+")")
 			} else {
-				line += " " + gitDirtyStyle.Render("("+p.GitStatus+")")
+				gitInfo = gitBranchStyle.Render(branch) + " " + gitDirtyStyle.Render("("+p.GitStatus+")")
 			}
 		} else {
-			line += "  " + versionStyle.Render(strings.Repeat(" ", maxBranchLen)+"—")
+			gitInfo = versionStyle.Render(strings.Repeat(" ", maxBranchLen) + "—")
 		}
 
-		b.WriteString(line + "\n")
-	}
+		line := " " + title + "  " + versionStyle.Render(version) + "  " + gitInfo
 
-	// Status message
-	if m.status != "" {
-		b.WriteString(statusStyle.Render(m.status))
+		if i == m.cursor {
+			b.WriteString(selectedStyle.Render(line))
+		} else {
+			b.WriteString(normalStyle.Render(line))
+		}
 		b.WriteString("\n")
 	}
 
-	// Help
-	editorLabel := strings.ToUpper(m.editorName[:1]) + m.editorName[1:] // Capitalize
-	help := helpStyle.Render(fmt.Sprintf("[Enter] Unity  [e] %s  [p] Copy path  [q] Quit", editorLabel))
-	b.WriteString(help)
+	// Show message if no matches
+	if len(m.filtered) == 0 {
+		b.WriteString(versionStyle.Render("  No matching projects"))
+		b.WriteString("\n")
+	}
+
+	// Counter and help
+	editorLabel := strings.ToUpper(m.editorName[:1]) + m.editorName[1:]
+	counter := fmt.Sprintf("  %d/%d", len(m.filtered), len(m.projects))
+	help := fmt.Sprintf("  Enter:Unity ^E:%s ^P:Copy Esc:Quit", editorLabel)
+	b.WriteString(counterStyle.Render(counter + help))
+	b.WriteString("\n")
+
+	// Prompt
+	b.WriteString(promptStyle.Render("> "))
+	b.WriteString(m.filterInput.View())
 
 	return b.String()
 }

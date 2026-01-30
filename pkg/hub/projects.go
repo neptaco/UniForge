@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/neptaco/uniforge/pkg/ui"
@@ -90,9 +91,16 @@ func (c *Client) ListProjectsWithGit() ([]ProjectInfo, error) {
 		return nil, err
 	}
 
+	// Fetch git info in parallel
+	var wg sync.WaitGroup
 	for i := range projects {
-		c.fillGitInfo(&projects[i])
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			c.fillGitInfo(&projects[idx])
+		}(i)
 	}
+	wg.Wait()
 
 	return projects, nil
 }
