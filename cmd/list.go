@@ -3,9 +3,16 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/neptaco/uniforge/pkg/hub"
 	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/spf13/cobra"
+)
+
+var (
+	editorVersionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("43"))
+	editorPathStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 )
 
 var editorListCmd = &cobra.Command{
@@ -31,14 +38,32 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(editors) == 0 {
-		fmt.Println("No Unity Editor installations found")
+		ui.Info("No Unity Editor installations found")
 		return nil
 	}
 
-	fmt.Println("Installed Unity Editor versions:")
+	rows := make([][]string, 0, len(editors))
 	for _, editor := range editors {
-		fmt.Printf("  - %s (%s)\n", editor.Version, editor.Path)
+		rows = append(rows, []string{editor.Version, editor.Path})
 	}
 
+	t := table.New().
+		Headers("VERSION", "PATH").
+		Rows(rows...).
+		Border(lipgloss.HiddenBorder()).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			switch col {
+			case 0:
+				return editorVersionStyle
+			case 1:
+				return editorPathStyle
+			}
+			return lipgloss.NewStyle()
+		})
+
+	fmt.Println(t)
 	return nil
 }
