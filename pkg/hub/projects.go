@@ -99,8 +99,8 @@ func (c *Client) ListProjectsWithGit() ([]ProjectInfo, error) {
 
 // MultipleMatchError is returned when multiple projects match the search query
 type MultipleMatchError struct {
-	Query    string
-	Matches  []ProjectInfo
+	Query   string
+	Matches []ProjectInfo
 }
 
 func (e *MultipleMatchError) Error() string {

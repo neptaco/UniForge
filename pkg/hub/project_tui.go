@@ -89,13 +89,13 @@ type OpenProjectFunc func(path, version string) error
 
 // projectModel is the bubbletea model for project TUI
 type projectModel struct {
-	projects       []ProjectInfo
-	cursor         int
-	status         string
-	quitting       bool
-	loading        bool
-	err            error
-	openProjectFn  OpenProjectFunc
+	projects      []ProjectInfo
+	cursor        int
+	status        string
+	quitting      bool
+	loading       bool
+	err           error
+	openProjectFn OpenProjectFunc
 }
 
 type projectsLoadedMsg struct {
