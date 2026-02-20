@@ -203,10 +203,11 @@ var errorPatterns = []*regexp.Regexp{
 
 // Patterns that should NOT be treated as errors (false positive exclusions)
 var notErrorPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`\d+\.?\d*\s*kb\s+\d+\.?\d*%`),          // Build size report lines like "0.1 kb 0.0%"
-	regexp.MustCompile(`Exception\.cs`),                        // Files named *Exception.cs
-	regexp.MustCompile(`(?i)WebGL\s+Exception\s+Support`),      // WebGL settings output like "WebGL Exception Support:"
-	regexp.MustCompile(`(?i)abort_threads:\s*Failed aborting`), // Unity shutdown message (not a real error)
+	regexp.MustCompile(`\d+\.?\d*\s*kb\s+\d+\.?\d*%`),                             // Build size report lines like "0.1 kb 0.0%"
+	regexp.MustCompile(`Exception\.cs`),                                           // Files named *Exception.cs
+	regexp.MustCompile(`(?i)WebGL\s+Exception\s+Support`),                         // WebGL settings output like "WebGL Exception Support:"
+	regexp.MustCompile(`(?i)abort_threads:\s*Failed aborting`),                    // Unity shutdown message (not a real error)
+	regexp.MustCompile(`Library[/\\]PackageCache.*exception\s+Failed to resolve`), // Type resolution errors from cached package DLLs (e.g., ReportGeneratorMerged.dll)
 }
 
 // Warning patterns

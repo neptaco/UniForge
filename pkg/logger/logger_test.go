@@ -355,6 +355,16 @@ func TestFormatterNoisePriority(t *testing.T) {
 			line:     "Error: abort_threads: Failed aborting id: 000000000015C20, mono_thread_manage will ignore it",
 			expected: LogLevelNormal,
 		},
+		{
+			name:     "PackageCache type resolution error (Windows path) is not error",
+			line:     `Field 'System.Numerics.Vector4 SixLabors.ImageSharp.Formats.Jpeg.Components.Block8x8F::V1L' from 'C:\actions-runner\work\Library\PackageCache\com.unity.testtools.codecoverage@1.2.6\lib\ReportGenerator\ReportGeneratorMerged.dll', exception Failed to resolve System.Numerics.Vector4`,
+			expected: LogLevelNormal,
+		},
+		{
+			name:     "PackageCache type resolution error (Unix path) is not error",
+			line:     "Field 'System.Numerics.Vector2 SixLabors.Fonts.GlyphInstance::Point' from '/home/runner/Library/PackageCache/com.unity.testtools.codecoverage@1.2.6/lib/ReportGenerator/ReportGeneratorMerged.dll', exception Failed to resolve System.Numerics.Vector2",
+			expected: LogLevelNormal,
+		},
 	}
 
 	for _, tt := range tests {
