@@ -337,8 +337,9 @@ func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 	if len(options.Modules) > 0 {
 		moduleList := c.mapModules(options.Modules)
 		if len(moduleList) > 0 {
-			args = append(args, "--module")
-			args = append(args, moduleList...)
+			for _, mod := range moduleList {
+				args = append(args, "--module", mod)
+			}
 			// Add --childModules flag to automatically install child modules (e.g., android-open-jdk)
 			args = append(args, "--childModules")
 		}
@@ -922,9 +923,8 @@ func (c *Client) InstallModules(version string, modules []string) error {
 	args := []string{"--", "--headless", "install-modules", "--version", version}
 
 	moduleList := c.mapModules(modules)
-	if len(moduleList) > 0 {
-		args = append(args, "--module")
-		args = append(args, moduleList...)
+	for _, mod := range moduleList {
+		args = append(args, "--module", mod)
 	}
 
 	// Add --childModules flag to automatically install child modules (e.g., android-open-jdk)
