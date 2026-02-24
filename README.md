@@ -137,6 +137,15 @@ uniforge editor install 2022.3.10f1
 # Install with modules
 uniforge editor install 2022.3.10f1 --modules ios,android
 
+# Install specific architecture
+uniforge editor install 2022.3.10f1 --architecture arm64
+
+# Force reinstall
+uniforge editor install 2022.3.10f1 --force
+
+# Install with changeset (for versions not in release list)
+uniforge editor install 2022.3.10f1 --changeset abc123def456
+
 # List installed Unity Editors
 uniforge editor list
 
@@ -201,7 +210,19 @@ uniforge run ./MyProject -- -executeMethod Build.Execute
 
 # Run with CI mode (optimized output)
 uniforge run ./MyProject --ci -- -executeMethod Build.Execute
+
+# Save log to file
+uniforge run ./MyProject --log-file ./build.log -- -executeMethod Build.Execute
+
+# Show timestamps
+uniforge run ./MyProject -t -- -executeMethod Build.Execute
 ```
+
+**Options:**
+- `--ci`: CI mode (optimized output format)
+- `--log-file <path>`: Path to save log file
+- `--timeout <seconds>`: Timeout in seconds (default: 3600)
+- `-t, --timestamp`: Show timestamp for each line
 
 #### CI Mode Features
 
@@ -227,7 +248,22 @@ uniforge test ./MyProject --platform editmode \
 
 # CI mode with custom timeout
 uniforge test ./MyProject --platform editmode --ci --timeout 1800
+
+# Save log to file
+uniforge test ./MyProject --platform editmode --log-file ./test.log
+
+# Show timestamps
+uniforge test ./MyProject --platform editmode -t
 ```
+
+**Options:**
+- `--platform <editmode|playmode>`: Test platform (required)
+- `--filter <expression>`: Test filter expression
+- `--results <path>`: Path to save test results (XML)
+- `--log-file <path>`: Path to save log file
+- `--timeout <seconds>`: Test timeout in seconds (default: 600)
+- `--ci`: CI mode (optimized output format)
+- `-t, --timestamp`: Show timestamp for each line
 
 ### Check .meta File Integrity
 
@@ -255,6 +291,9 @@ uniforge project list
 uniforge project list --format=json
 uniforge project list --format=tsv
 uniforge project list --path-only
+
+# List without Git information (faster)
+uniforge project list --no-git
 
 # Open project by name (partial match supported)
 uniforge project open my-game
@@ -301,12 +340,36 @@ uniforge restart ./MyProject
 # Show last 100 lines (default)
 uniforge logs
 
+# Show last 500 lines
+uniforge logs -n 500
+
 # Follow log in real-time
 uniforge logs -f
 
-# Show with timestamps
+# Follow with timestamps
 uniforge logs -f -t
+
+# Show raw output without colors or filtering
+uniforge logs --raw
+
+# Show project stack traces (Assets/, Packages/)
+uniforge logs --trace
+
+# Show full stack traces (including Unity internals)
+uniforge logs --full-trace
+
+# Open in text editor ($EDITOR or vim)
+uniforge logs --editor
 ```
+
+**Options:**
+- `-f, --follow`: Follow log output in real-time
+- `-n, --lines <count>`: Number of lines to show (default: 100)
+- `-t, --timestamp`: Show timestamp for each line
+- `--raw`: Show raw output without colors or filtering
+- `--trace`: Show project stack traces (Assets/, Packages/)
+- `--full-trace`: Show full stack traces including Unity internals
+- `--editor`: Open log in text editor ($EDITOR or vim)
 
 ### Manage Release Cache
 
@@ -329,9 +392,29 @@ uniforge license status
 # Activate license (Personal: no serial, Plus/Pro: serial required)
 uniforge license activate
 
+# Activate with explicit credentials
+uniforge license activate -u user@example.com -p password -s SERIAL-KEY
+
+# Activate using a specific Unity version
+uniforge license activate --version 2022.3.10f1
+
 # Return license
 uniforge license return
+
+# Return using a specific Unity version
+uniforge license return --version 2022.3.10f1
 ```
+
+**Activate options:**
+- `-u, --username <email>`: Unity ID email (or `UNITY_USERNAME` env)
+- `-p, --password <password>`: Password (or `UNITY_PASSWORD` env)
+- `-s, --serial <key>`: Serial key for Plus/Pro license (or `UNITY_SERIAL` env)
+- `--version <version>`: Unity version to use for activation
+- `--timeout <seconds>`: Timeout in seconds (default: 300)
+
+**Return options:**
+- `--version <version>`: Unity version to use for return
+- `--timeout <seconds>`: Timeout in seconds (default: 300)
 
 #### Supported License Types
 
