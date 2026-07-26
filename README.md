@@ -266,6 +266,9 @@ uniforge editor install -p .
 # Install specific version with modules
 uniforge editor install 6000.0.40f1 --modules ios,android
 
+# Install with machine-readable progress (one JSON object per line)
+uniforge editor install 6000.0.40f1 --output json
+
 # List installed Unity Editors
 uniforge editor list
 

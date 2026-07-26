@@ -1173,18 +1173,28 @@ func RunEditorInstallTUI(client *Client) error {
 
 		// Check if this is just adding modules to existing install
 		if model.selectedVersion != nil && model.selectedVersion.Installed {
-			if err := client.InstallModules(model.pendingInstall.Version, model.pendingInstall.Modules); err != nil {
+			installedModules, err := client.InstallModules(model.pendingInstall.Version, model.pendingInstall.Modules)
+			if err != nil {
 				return fmt.Errorf("failed to install modules: %w", err)
 			}
 			fmt.Printf("Successfully added modules to Unity %s: %s\n",
-				model.pendingInstall.Version, strings.Join(model.pendingInstall.Modules, ", "))
+				model.pendingInstall.Version, strings.Join(installedModules, ", "))
 		} else {
-			if err := client.InstallEditorWithOptions(*model.pendingInstall); err != nil {
+			outcome, err := client.InstallEditorWithOptions(*model.pendingInstall)
+			if err != nil {
 				return fmt.Errorf("failed to install Unity: %w", err)
 			}
+			if outcome.AlreadyInstalled {
+				fmt.Printf("Unity %s was already installed at: %s\n",
+					model.pendingInstall.Version, outcome.Path)
+				if len(outcome.Modules) > 0 {
+					fmt.Printf("Added modules: %s\n", strings.Join(outcome.Modules, ", "))
+				}
+				return nil
+			}
 			msg := fmt.Sprintf("Successfully installed Unity %s", model.pendingInstall.Version)
-			if len(model.pendingInstall.Modules) > 0 {
-				msg += fmt.Sprintf(" with modules: %s", strings.Join(model.pendingInstall.Modules, ", "))
+			if len(outcome.Modules) > 0 {
+				msg += fmt.Sprintf(" with modules: %s", strings.Join(outcome.Modules, ", "))
 			}
 			fmt.Println(msg)
 		}
