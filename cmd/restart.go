@@ -1,8 +1,8 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/neptaco/uniforge/pkg/ui"
 	"github.com/neptaco/uniforge/pkg/unity"
@@ -56,16 +56,14 @@ func runRestart(cmd *cobra.Command, args []string) error {
 
 	editor := unity.NewEditor(version)
 
-	// Try to close existing instance (ignore error if not running)
-	_ = ui.WithSpinnerNoResult("Closing Unity Editor...", func() error {
-		if err := editor.Close(project.Path, restartForce); err != nil {
-			ui.Debug("No running editor found or close failed", "error", err)
-		}
-		return nil
+	// A restart must not open another Editor when normal quit was cancelled,
+	// timed out, or otherwise failed. Only an already-closed Editor is ignored.
+	err = ui.WithSpinnerNoResult("Closing Unity Editor...", func() error {
+		return editor.Close(project.Path, restartForce)
 	})
-
-	// Wait a moment for the editor to fully close
-	time.Sleep(2 * time.Second)
+	if err != nil && !errors.Is(err, unity.ErrEditorNotRunning) {
+		return fmt.Errorf("failed to close editor before restart: %w", err)
+	}
 
 	// Open editor
 	err = ui.WithSpinnerNoResult("Starting Unity Editor...", func() error {

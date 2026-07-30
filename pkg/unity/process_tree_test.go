@@ -169,6 +169,17 @@ func TestReapDoesNothingWhenDescendantsAlreadyExited(t *testing.T) {
 	}
 }
 
+func TestWaitForNaturalExitNeverSignalsSurvivors(t *testing.T) {
+	table := newFakeProcessTable(200)
+	table.reaper().waitForNaturalExit(reapTargets(200), 5*time.Millisecond)
+	if len(table.termCalls) != 0 || len(table.killCalls) != 0 {
+		t.Fatalf("normal quit grace must not signal survivors, got term=%v kill=%v", table.termCalls, table.killCalls)
+	}
+	if !table.alive[200] {
+		t.Fatal("normal quit grace unexpectedly stopped the surviving process")
+	}
+}
+
 func TestReapTerminatesSurvivorsAfterNaturalGrace(t *testing.T) {
 	table := newFakeProcessTable(200)
 	table.reaper().reap(reapTargets(200), 5*time.Millisecond, 50*time.Millisecond)

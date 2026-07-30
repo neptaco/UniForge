@@ -137,12 +137,115 @@ func TestRuntimeDoctorDoesNotStopLicensingClientWhileHubRuns(t *testing.T) {
 	project := makeRuntimeDoctorProject(t)
 	processes := []processInfo{
 		{PID: 77, Name: "Unity Hub", Command: `/Applications/Unity Hub.app/Contents/MacOS/Unity Hub`},
-		{PID: 99, Name: "Unity.Licensing.Client", Command: "Unity.Licensing.Client"},
+		{
+			PID:     99,
+			Name:    "Unity.Licensing.Client",
+			Command: `/Applications/Unity Hub.app/Contents/Frameworks/UnityLicensingClient_V1.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer`,
+		},
 	}
 	doctor := testRuntimeDoctor(processes, func(pid int) error { t.Fatalf("unexpected stop %d", pid); return nil })
 	result, err := doctor.Check(project, true)
 	if err != nil || result.HasIssues() {
 		t.Fatalf("unexpected result: %+v, err=%v", result, err)
+	}
+}
+
+func TestRuntimeDoctorStopsEditorLicensingClientWhileHubRuns(t *testing.T) {
+	project := makeRuntimeDoctorProject(t)
+	processes := []processInfo{
+		{PID: 77, Name: "Unity Hub", Command: `/Applications/Unity Hub.app/Contents/MacOS/Unity Hub`},
+		{
+			PID:     98,
+			Name:    "Unity.Licensing.Client",
+			Command: `/Applications/Unity Hub.app/Contents/Frameworks/UnityLicensingClient_V1.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer`,
+		},
+		{
+			PID:     99,
+			Name:    "Unity.Licensing.Client",
+			Command: `/Applications/Unity/Hub/Editor/6000.4.11f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer-6000.4.11`,
+		},
+	}
+	var stopped []int
+	doctor := testRuntimeDoctor(processes, func(pid int) error {
+		stopped = append(stopped, pid)
+		return nil
+	})
+	result, err := doctor.Check(project, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.HasUnfixedBlockingIssues() || len(result.Fixes) != 1 || len(stopped) != 1 || stopped[0] != 99 {
+		t.Fatalf("unexpected result: %+v, stopped=%v", result, stopped)
+	}
+}
+
+func TestRuntimeDoctorStopsGenericEditorBundledLicensingClientWhileHubRuns(t *testing.T) {
+	project := makeRuntimeDoctorProject(t)
+	processes := []processInfo{
+		{PID: 77, Name: "Unity Hub", Command: `/Applications/Unity Hub.app/Contents/MacOS/Unity Hub`},
+		{
+			PID:     99,
+			Name:    "Unity.Licensing.Client",
+			Command: `/Applications/Unity/Hub/Editor/6000.4.11f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer`,
+		},
+	}
+	var stopped int
+	doctor := testRuntimeDoctor(processes, func(pid int) error {
+		stopped = pid
+		return nil
+	})
+	result, err := doctor.Check(project, true)
+	if err != nil || result.HasUnfixedBlockingIssues() || stopped != 99 {
+		t.Fatalf("unexpected result: %+v, stopped=%d, err=%v", result, stopped, err)
+	}
+}
+
+func TestRuntimeDoctorPreservesOpaqueLicensingClientWhileHubRuns(t *testing.T) {
+	project := makeRuntimeDoctorProject(t)
+	processes := []processInfo{
+		{PID: 77, Name: "Unity Hub", Command: `/Applications/Unity Hub.app/Contents/MacOS/Unity Hub`},
+		{PID: 99, Name: "Unity.Licensing.Client"},
+	}
+	doctor := testRuntimeDoctor(processes, func(pid int) error { t.Fatalf("unexpected stop %d", pid); return nil })
+	result, err := doctor.Check(project, true)
+	if err != nil || result.HasIssues() {
+		t.Fatalf("unexpected result: %+v, err=%v", result, err)
+	}
+}
+
+func TestEditorOwnedUnityLicensingClientDetection(t *testing.T) {
+	tests := []struct {
+		name    string
+		process processInfo
+		want    bool
+	}{
+		{
+			name:    "version scoped pipe",
+			process: processInfo{Name: "Unity.Licensing.Client", Command: `Unity.Licensing.Client --namedPipe "Unity-LicenseClient-developer-6000.4.11"`},
+			want:    true,
+		},
+		{
+			name:    "editor bundled generic pipe",
+			process: processInfo{Name: "Unity.Licensing.Client", Command: `/Applications/Unity/Hub/Editor/6000.4.11f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer`},
+			want:    true,
+		},
+		{
+			name:    "hub generic pipe",
+			process: processInfo{Name: "Unity.Licensing.Client", Command: `/Applications/Unity Hub.app/Contents/Frameworks/UnityLicensingClient_V1.app/Contents/MacOS/Unity.Licensing.Client --namedPipe=Unity-LicenseClient-developer`},
+			want:    false,
+		},
+		{
+			name:    "opaque client",
+			process: processInfo{Name: "Unity.Licensing.Client"},
+			want:    false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isEditorOwnedUnityLicensingClient(test.process); got != test.want {
+				t.Fatalf("isEditorOwnedUnityLicensingClient() = %t, want %t", got, test.want)
+			}
+		})
 	}
 }
 

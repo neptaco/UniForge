@@ -15,7 +15,11 @@ import (
 	"time"
 )
 
-var projectPathArgumentPattern = regexp.MustCompile(`(?i)(?:^|\s)-projectPath(?:=|\s+)(?:"([^"]+)"|'([^']+)'|(\S+))`)
+var (
+	projectPathArgumentPattern = regexp.MustCompile(`(?i)(?:^|\s)-projectPath(?:=|\s+)(?:"([^"]+)"|'([^']+)'|(\S+))`)
+	namedPipeArgumentPattern   = regexp.MustCompile(`(?i)(?:^|\s)--namedPipe(?:=|\s+)(?:"([^"]+)"|'([^']+)'|(\S+))`)
+	editorLicensePipePattern   = regexp.MustCompile(`(?i)^Unity-LicenseClient-.+-\d+\.\d+\.\d+$`)
+)
 
 const (
 	RuntimeIssueActiveEditor          = "active_editor"
@@ -122,7 +126,7 @@ func (d *RuntimeDoctor) Check(projectPath string, fix bool) (*RuntimeDoctorResul
 	if err := d.checkILPPPid(result, absPath, processByPID, processesKnown, fix); err != nil {
 		return result, err
 	}
-	if err := d.checkLicensingClients(result, hasAnyUnityEditor || hasUnityHub, licensingClients, processesKnown && !hasOpaqueUnityEditor, fix); err != nil {
+	if err := d.checkLicensingClients(result, hasAnyUnityEditor, hasUnityHub, licensingClients, processesKnown && !hasOpaqueUnityEditor, fix); err != nil {
 		return result, err
 	}
 	return result, nil
@@ -199,11 +203,17 @@ func (d *RuntimeDoctor) checkILPPPid(result *RuntimeDoctorResult, projectPath st
 	return nil
 }
 
-func (d *RuntimeDoctor) checkLicensingClients(result *RuntimeDoctorResult, hasAnyUnityEditor bool, clients []processInfo, processesKnown, fix bool) error {
+func (d *RuntimeDoctor) checkLicensingClients(result *RuntimeDoctorResult, hasAnyUnityEditor, hasUnityHub bool, clients []processInfo, processesKnown, fix bool) error {
 	if !processesKnown || hasAnyUnityEditor {
 		return nil
 	}
 	for _, process := range clients {
+		// Hub owns a generic licensing client that must stay alive while Hub is
+		// running. Editor-bundled/version-scoped clients are safe to clean once
+		// every Editor has exited, even if Hub itself is still open.
+		if hasUnityHub && !isEditorOwnedUnityLicensingClient(process) {
+			continue
+		}
 		index := result.addIssue(RuntimeIssue{Kind: RuntimeIssueOrphanLicensingClient, Message: "orphan Unity licensing client is running without any Unity Editor process", PID: process.PID, Blocking: true})
 		if !fix {
 			continue
@@ -337,6 +347,33 @@ func isUnityLicensingClient(process processInfo) bool {
 	name := normalizedExecutableName(process)
 	return name == "unity.licensing.client" || name == "unity.licensing.client.exe" ||
 		name == "unitylicensingclient" || name == "unitylicensingclient.exe"
+}
+
+func isEditorOwnedUnityLicensingClient(process processInfo) bool {
+	if !isUnityLicensingClient(process) {
+		return false
+	}
+
+	if editorLicensePipePattern.MatchString(namedPipeArgument(process.Command)) {
+		return true
+	}
+
+	command := strings.ToLower(strings.ReplaceAll(process.Command, `\`, "/"))
+	return strings.Contains(command, "/unity.app/contents/helpers/unitylicensingclient") ||
+		(strings.Contains(command, "/editor/") && strings.Contains(command, "unity.licensing.client"))
+}
+
+func namedPipeArgument(command string) string {
+	match := namedPipeArgumentPattern.FindStringSubmatch(command)
+	if match == nil {
+		return ""
+	}
+	for _, value := range match[1:] {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func isUnityHub(process processInfo) bool {
