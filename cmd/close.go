@@ -16,7 +16,8 @@ var closeCmd = &cobra.Command{
 	Use:   "close [project]",
 	Short: "Close running Unity Editor",
 	Long: `Close the Unity Editor that has the specified project open.
-By default, sends SIGTERM for graceful shutdown. Use --force for immediate termination.
+By default, requests a normal application quit and respects unsaved-change prompts.
+It never escalates to a force kill unless --force is explicitly specified.
 
 Examples:
   # Close Unity Editor for current project
@@ -25,7 +26,7 @@ Examples:
   # Close with specific project path
   uniforge close /path/to/project
 
-  # Force close (SIGKILL)
+  # Force close immediately, bypassing Unity's normal shutdown
   uniforge close --force`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runClose,

@@ -115,6 +115,22 @@ func (r *processTreeReaper) reap(descendants []processInfo, naturalGrace, termGr
 	}
 }
 
+// waitForNaturalExit gives helpers owned by a normally-quitting Editor time to
+// finish their own shutdown. It never sends a signal; any verified stale state
+// is handled separately after the normal application lifecycle has completed.
+func (r *processTreeReaper) waitForNaturalExit(descendants []processInfo, grace time.Duration) {
+	if len(descendants) == 0 {
+		return
+	}
+	pending := make(map[int]processInfo, len(descendants))
+	for _, process := range descendants {
+		pending[process.PID] = process
+	}
+	if survivors := r.waitUntilGone(pending, grace); len(survivors) > 0 {
+		ui.Debug("Unity child processes remain after normal quit grace period", "count", len(survivors))
+	}
+}
+
 // waitUntilGone polls per-PID liveness (cheap: no full process listing) until
 // the pids disappear or the grace period ends, returning the pids still alive.
 func (r *processTreeReaper) waitUntilGone(pids map[int]processInfo, grace time.Duration) map[int]processInfo {

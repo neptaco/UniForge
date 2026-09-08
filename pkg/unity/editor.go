@@ -1,6 +1,7 @@
 package unity
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/neptaco/uniforge/pkg/hub"
@@ -16,8 +16,9 @@ import (
 )
 
 type Editor struct {
-	Version string
-	Path    string
+	Version       string
+	Path          string
+	runtimeDoctor *RuntimeDoctor
 }
 
 // EditorOpenOptions configures a GUI Unity Editor launch.
@@ -27,11 +28,18 @@ type EditorOpenOptions struct {
 
 type unityProcessFinder func(projectPath string) (int, error)
 
-const unityProcessExitPollInterval = 200 * time.Millisecond
+// ErrEditorNotRunning indicates that the target project has no active Editor.
+var ErrEditorNotRunning = errors.New("editor is not running")
+
+const (
+	unityProcessExitPollInterval = 200 * time.Millisecond
+	editorNormalQuitTimeout      = 30 * time.Second
+)
 
 func NewEditor(version string) *Editor {
 	return &Editor{
-		Version: version,
+		Version:       version,
+		runtimeDoctor: NewRuntimeDoctor(),
 	}
 }
 
@@ -131,6 +139,10 @@ func (e *Editor) OpenWithOptions(projectPath string, options EditorOpenOptions) 
 		return fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
+	if err := e.prepareRuntimeForOpen(absProjectPath); err != nil {
+		return err
+	}
+
 	// Check if Unity Editor is already running for this project
 	if err := e.CheckNotRunning(absProjectPath); err != nil {
 		return err
@@ -172,6 +184,42 @@ func (e *Editor) OpenWithOptions(projectPath string, options EditorOpenOptions) 
 	return nil
 }
 
+func (e *Editor) prepareRuntimeForOpen(projectPath string) error {
+	result, err := e.checkAndFixRuntime(projectPath)
+	if err != nil {
+		return fmt.Errorf("failed to prepare Unity runtime: %w", err)
+	}
+	for _, fix := range result.Fixes {
+		ui.Debug("Repaired Unity runtime before launch", "kind", fix.Kind, "path", fix.Path, "pid", fix.PID)
+	}
+	if result.HasUnfixedBlockingIssues() {
+		return fmt.Errorf("unity runtime has blocking issue(s); run `uniforge doctor %q --fix` for details", projectPath)
+	}
+	return nil
+}
+
+func (e *Editor) repairRuntimeAfterClose(projectPath string) error {
+	result, err := e.checkAndFixRuntime(projectPath)
+	if err != nil {
+		return fmt.Errorf("failed to repair Unity runtime after close: %w", err)
+	}
+	for _, fix := range result.Fixes {
+		ui.Debug("Repaired Unity runtime after close", "kind", fix.Kind, "path", fix.Path, "pid", fix.PID)
+	}
+	if result.HasUnfixedBlockingIssues() {
+		return fmt.Errorf("unity runtime has blocking issue(s) after close; run `uniforge doctor %q --fix` for details", projectPath)
+	}
+	return nil
+}
+
+func (e *Editor) checkAndFixRuntime(projectPath string) (*RuntimeDoctorResult, error) {
+	doctor := e.runtimeDoctor
+	if doctor == nil {
+		doctor = NewRuntimeDoctor()
+	}
+	return doctor.Check(projectPath, true)
+}
+
 func buildEditorLaunchArgs(projectPath, logFilePath string) []string {
 	args := []string{"-projectPath", projectPath}
 	if logFilePath != "" {
@@ -193,7 +241,7 @@ func (e *Editor) Close(projectPath string, force bool) error {
 	}
 
 	if pid == 0 {
-		return fmt.Errorf("no Unity Editor process found for project: %s", absProjectPath)
+		return fmt.Errorf("%w for project: %s", ErrEditorNotRunning, absProjectPath)
 	}
 
 	process, err := os.FindProcess(pid)
@@ -205,13 +253,17 @@ func (e *Editor) Close(projectPath string, force bool) error {
 	// ILPP) before signalling: once the Editor dies they are reparented and can
 	// no longer be attributed to it. A killed Editor cannot tear its children
 	// down, so leftovers are reaped afterwards — even when the exit wait fails,
-	// which is exactly when orphans are guaranteed. A graceful exit is left to
-	// clean up after itself: surviving children may be serving other Editors.
+	// which is exactly when orphans are guaranteed. A graceful exit gets a
+	// conservative runtime-doctor pass afterwards: it only cleans an Editor
+	// licensing client when no other Editor is running.
 	reaper := newProcessTreeReaper()
 	descendants := reaper.snapshotDescendants(pid)
 	reapAfterKill := func(waitErr error) error {
 		reaper.reap(descendants, treeReapNaturalGrace, treeReapTermGrace)
-		return waitErr
+		if waitErr != nil {
+			return waitErr
+		}
+		return e.repairRuntimeAfterClose(absProjectPath)
 	}
 
 	if force {
@@ -222,21 +274,21 @@ func (e *Editor) Close(projectPath string, force bool) error {
 		return reapAfterKill(waitForUnityProcessExit(absProjectPath, 10*time.Second, unityProcessExitPollInterval, e.findUnityProcess))
 	}
 
-	ui.Debug("Terminating Unity Editor process", "pid", pid)
-	if err := process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to terminate process: %w", err)
+	ui.Debug("Requesting normal Unity Editor quit", "pid", pid)
+	if err := requestEditorQuit(process); err != nil {
+		return fmt.Errorf("failed to request normal Unity Editor quit: %w", err)
 	}
 
-	if err := waitForUnityProcessExit(absProjectPath, 10*time.Second, unityProcessExitPollInterval, e.findUnityProcess); err == nil {
-		ui.Debug("Unity Editor terminated gracefully")
-		return nil
+	if err := waitForUnityProcessExit(absProjectPath, editorNormalQuitTimeout, unityProcessExitPollInterval, e.findUnityProcess); err != nil {
+		return fmt.Errorf(
+			"editor did not complete normal quit; it may be waiting for an unsaved-changes confirmation: %w (use --force only to discard that shutdown flow)",
+			err,
+		)
 	}
 
-	ui.Warn("Grace period expired, force killing...")
-	if err := process.Kill(); err != nil {
-		return fmt.Errorf("failed to kill process: %w", err)
-	}
-	return reapAfterKill(waitForUnityProcessExit(absProjectPath, 5*time.Second, unityProcessExitPollInterval, e.findUnityProcess))
+	ui.Debug("Unity Editor completed normal quit")
+	reaper.waitForNaturalExit(descendants, treeReapNaturalGrace)
+	return e.repairRuntimeAfterClose(absProjectPath)
 }
 
 type unityLockfileProbe func(path string) (held bool, err error)

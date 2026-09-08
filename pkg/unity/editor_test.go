@@ -66,6 +66,103 @@ func TestCheckNotRunningRejectsUnverifiedLockfile(t *testing.T) {
 	}
 }
 
+func TestPrepareRuntimeForOpenRepairsOrphanEditorLicensingClient(t *testing.T) {
+	projectPath := t.TempDir()
+	processes := []processInfo{
+		{PID: 77, Name: "Unity Hub", Command: `/Applications/Unity Hub.app/Contents/MacOS/Unity Hub`},
+		{
+			PID:     99,
+			Name:    "Unity.Licensing.Client",
+			Command: `/Applications/Unity/Hub/Editor/6000.4.11f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer-6000.4.11`,
+		},
+	}
+	var stopped int
+	editor := NewEditor("6000.4.11f1")
+	editor.runtimeDoctor = testRuntimeDoctor(processes, func(pid int) error {
+		stopped = pid
+		return nil
+	})
+
+	if err := editor.prepareRuntimeForOpen(projectPath); err != nil {
+		t.Fatalf("prepareRuntimeForOpen failed: %v", err)
+	}
+	if stopped != 99 {
+		t.Fatalf("stopped pid = %d, want 99", stopped)
+	}
+}
+
+func TestPrepareRuntimeForOpenRejectsUnfixedBlockingIssue(t *testing.T) {
+	projectPath := t.TempDir()
+	pidFile := filepath.Join(projectPath, "Library", "ilpp.pid")
+	if err := os.MkdirAll(filepath.Dir(pidFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pidFile, []byte("not-a-pid\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	editor := NewEditor("6000.4.11f1")
+	editor.runtimeDoctor = testRuntimeDoctor(nil, nil)
+
+	err := editor.prepareRuntimeForOpen(projectPath)
+	if err == nil || !strings.Contains(err.Error(), "unity runtime has blocking issue") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRepairRuntimeAfterCloseStopsOrphanEditorLicensingClient(t *testing.T) {
+	projectPath := t.TempDir()
+	processes := []processInfo{
+		{PID: 77, Name: "Unity Hub", Command: `/Applications/Unity Hub.app/Contents/MacOS/Unity Hub`},
+		{
+			PID:     99,
+			Name:    "Unity.Licensing.Client",
+			Command: `/Applications/Unity/Hub/Editor/6000.4.11f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer-6000.4.11`,
+		},
+	}
+	var stopped int
+	editor := NewEditor("6000.4.11f1")
+	editor.runtimeDoctor = testRuntimeDoctor(processes, func(pid int) error {
+		stopped = pid
+		return nil
+	})
+
+	if err := editor.repairRuntimeAfterClose(projectPath); err != nil {
+		t.Fatalf("repairRuntimeAfterClose failed: %v", err)
+	}
+	if stopped != 99 {
+		t.Fatalf("stopped pid = %d, want 99", stopped)
+	}
+}
+
+func TestRepairRuntimeAfterClosePreservesLicensingClientWhileAnotherEditorRuns(t *testing.T) {
+	projectPath := t.TempDir()
+	processes := []processInfo{
+		{
+			PID:     88,
+			Name:    "Unity",
+			Command: `/Applications/Unity/Hub/Editor/6000.4.11f1/Unity.app/Contents/MacOS/Unity -projectPath /Projects/Other`,
+		},
+		{
+			PID:     99,
+			Name:    "Unity.Licensing.Client",
+			Command: `/Applications/Unity/Hub/Editor/6000.4.11f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client --namedPipe Unity-LicenseClient-developer-6000.4.11`,
+		},
+	}
+	var stopped int
+	editor := NewEditor("6000.4.11f1")
+	editor.runtimeDoctor = testRuntimeDoctor(processes, func(pid int) error {
+		stopped = pid
+		return nil
+	})
+
+	if err := editor.repairRuntimeAfterClose(projectPath); err != nil {
+		t.Fatalf("repairRuntimeAfterClose failed: %v", err)
+	}
+	if stopped != 0 {
+		t.Fatalf("stopped pid = %d, want no stopped process", stopped)
+	}
+}
+
 func createEditorLockfile(t *testing.T) (string, string) {
 	t.Helper()
 	projectPath := t.TempDir()
