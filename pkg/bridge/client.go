@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +21,12 @@ const (
 	defaultRequestTimeout = 5 * time.Minute
 )
 
+// ErrConnectionInvalidated is returned when a previous request left the
+// connection in an unknown state (write failure, read timeout, undecodable
+// response, or a response id mismatch) and the connection was closed as a
+// result. Call Connect again to establish a fresh connection before retrying.
+var ErrConnectionInvalidated = errors.New("daemon connection was closed after a failed request; reconnect before retrying")
+
 // ClientOptions configures a bridge Client.
 type ClientOptions struct {
 	DaemonConfig    daemon.Config
@@ -30,9 +37,14 @@ type ClientOptions struct {
 }
 
 type Client struct {
-	options       ClientOptions
+	options ClientOptions
+
+	// mu serializes Connect/Close/request so that a single connection never has
+	// more than one in-flight request and interleaved writes cannot happen.
+	mu            sync.Mutex
 	conn          net.Conn
 	reader        *bufio.Reader
+	invalidated   bool
 	nextRequestID uint64
 	clientID      string
 }
@@ -55,6 +67,9 @@ func NewClient(options ClientOptions) *Client {
 }
 
 func (c *Client) Connect() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.conn != nil {
 		return nil
 	}
@@ -76,10 +91,16 @@ func (c *Client) Connect() error {
 
 	c.conn = conn
 	c.reader = bufio.NewReader(conn)
+	c.invalidated = false
 	return nil
 }
 
 func (c *Client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.invalidated = false
+
 	if c.conn == nil {
 		return nil
 	}
@@ -88,6 +109,18 @@ func (c *Client) Close() error {
 	c.conn = nil
 	c.reader = nil
 	return err
+}
+
+// invalidateLocked closes and drops the current connection so that no
+// subsequent request reads leftover bytes from a half-consumed response.
+// The caller must hold c.mu.
+func (c *Client) invalidateLocked() {
+	if c.conn != nil {
+		_ = c.conn.Close()
+	}
+	c.conn = nil
+	c.reader = nil
+	c.invalidated = true
 }
 
 func (c *Client) Register() (*ClientRegisterResult, error) {
@@ -144,7 +177,13 @@ func (c *Client) ToolCall(tool string, args map[string]any, projectID string, ti
 }
 
 func (c *Client) request(method string, params any, timeout time.Duration, target any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.conn == nil || c.reader == nil {
+		if c.invalidated {
+			return ErrConnectionInvalidated
+		}
 		return errors.New("daemon client is not connected")
 	}
 
@@ -163,6 +202,7 @@ func (c *Client) request(method string, params any, timeout time.Duration, targe
 
 	_ = c.conn.SetWriteDeadline(time.Now().Add(timeout))
 	if _, err := c.conn.Write(append(data, '\n')); err != nil {
+		c.invalidateLocked()
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 
@@ -171,6 +211,9 @@ func (c *Client) request(method string, params any, timeout time.Duration, targe
 		_ = c.conn.SetReadDeadline(deadline)
 		line, err := c.reader.ReadBytes('\n')
 		if err != nil {
+			// The response line may have been partially consumed; the connection
+			// can no longer be trusted for a subsequent request.
+			c.invalidateLocked()
 			if errors.Is(err, io.EOF) {
 				return errors.New("daemon connection closed")
 			}
@@ -184,6 +227,7 @@ func (c *Client) request(method string, params any, timeout time.Duration, targe
 
 		var envelope rpcEnvelope
 		if err := json.Unmarshal([]byte(trimmed), &envelope); err != nil {
+			c.invalidateLocked()
 			return fmt.Errorf("failed to decode daemon response: %w", err)
 		}
 
@@ -191,8 +235,9 @@ func (c *Client) request(method string, params any, timeout time.Duration, targe
 			continue
 		}
 
-		if extractResponseID(envelope.ID) != requestID {
-			continue
+		if responseID := extractResponseID(envelope.ID); responseID != requestID {
+			c.invalidateLocked()
+			return fmt.Errorf("unexpected daemon response id %q (expected %q)", responseID, requestID)
 		}
 
 		if envelope.Error != nil {
