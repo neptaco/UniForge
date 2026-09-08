@@ -23,7 +23,9 @@ type Client struct {
 	installPath          string // Cache for install path
 	installPathInit      bool   // Whether install path has been initialized
 	projectsFileOverride string // For testing: override projects file path
+	lockDirOverride      string // For testing: override install lock directory
 	NoCache              bool   // Skip reading from cache (still writes to cache)
+	ProgressJSON         bool   // Emit Unity Hub progress as JSON Lines instead of text
 
 	majorVersionsOnce sync.Once // Memoizes DiscoverMajorVersions per Client
 	majorVersions     []string
@@ -49,6 +51,15 @@ type InstallOptions struct {
 	Changeset    string
 	Modules      []string
 	Architecture string
+	Force        bool // Reinstall even if the editor is already present
+}
+
+// InstallOutcome describes what an install actually did, so callers can report
+// it without asking the filesystem again or guessing.
+type InstallOutcome struct {
+	AlreadyInstalled bool     // Another process had already installed it
+	Path             string   // Path to the editor executable, when known
+	Modules          []string // Modules handed to Unity Hub, with unknown ones dropped
 }
 
 // moduleFileEntry represents an entry in modules.json
@@ -308,16 +319,62 @@ func isValidUnityVersion(s string) bool {
 	return true
 }
 
-func (c *Client) InstallEditor(version string, modules []string) error {
+func (c *Client) InstallEditor(version string, modules []string) (InstallOutcome, error) {
 	return c.InstallEditorWithOptions(InstallOptions{
 		Version: version,
 		Modules: modules,
 	})
 }
 
-func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
+func (c *Client) InstallEditorWithOptions(options InstallOptions) (InstallOutcome, error) {
 	if c.hubPath == "" {
-		return fmt.Errorf("unity hub not found")
+		return InstallOutcome{}, fmt.Errorf("unity hub not found")
+	}
+
+	// Resolve the architecture first: it is part of the lock identity because
+	// each architecture installs into its own directory.
+	architecture := options.Architecture
+	if architecture == "" {
+		architecture = c.detectArchitecture()
+	}
+
+	var outcome InstallOutcome
+	err := c.withEditorLock(options.Version, func() error {
+		var err error
+		outcome, err = c.installEditorLocked(options, architecture)
+		return err
+	})
+	return outcome, err
+}
+
+// installEditorLocked performs the install with the editor lock already held.
+func (c *Client) installEditorLocked(options InstallOptions, architecture string) (InstallOutcome, error) {
+	// Re-check under the lock. A run that started before another one finished
+	// would otherwise reinstall the same editor, and Unity Hub would place the
+	// duplicate in a `<version>-<architecture>` directory because the plain one
+	// is already occupied.
+	if !options.Force {
+		installed, path, checkErr := c.IsEditorInstalled(options.Version)
+		switch {
+		case checkErr != nil:
+			ui.Debug("Failed to re-check installed editors under lock", "error", checkErr)
+		// Compare against what the caller actually asked for: an unspecified
+		// architecture accepts the editor that is already there.
+		case installed && c.ArchitectureMatches(path, options.Architecture):
+			// The editor is here, but the caller may also have asked for
+			// modules the other process did not install. Resolve them first so
+			// that unrecognised names are merely warned about, exactly as they
+			// would be on the ordinary install path.
+			missing := c.mapModules(c.GetMissingModules(path, options.Modules))
+			if len(missing) == 0 {
+				return InstallOutcome{AlreadyInstalled: true, Path: path}, nil
+			}
+			addedModules, err := c.installModulesLocked(options.Version, missing)
+			if err != nil {
+				return InstallOutcome{}, err
+			}
+			return InstallOutcome{AlreadyInstalled: true, Path: path, Modules: addedModules}, nil
+		}
 	}
 
 	args := []string{"--", "--headless", "install", "--version", options.Version}
@@ -328,21 +385,18 @@ func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 		ui.Debug("Using changeset", "changeset", options.Changeset)
 	}
 
-	// Add architecture if specified, otherwise auto-detect
-	architecture := options.Architecture
-	if architecture == "" {
-		architecture = c.detectArchitecture()
-	}
 	if architecture != "" {
 		args = append(args, "--architecture", architecture)
 		ui.Debug("Using architecture", "arch", architecture)
 	}
 
-	// Add modules
+	// Add modules. Unknown ones are dropped by mapModules, so report back the
+	// list Unity Hub was actually given.
+	var installedModules []string
 	if len(options.Modules) > 0 {
-		moduleList := c.mapModules(options.Modules)
-		if len(moduleList) > 0 {
-			for _, mod := range moduleList {
+		installedModules = c.mapModules(options.Modules)
+		if len(installedModules) > 0 {
+			for _, mod := range installedModules {
 				args = append(args, "--module", mod)
 			}
 			// Add --childModules flag to automatically install child modules (e.g., android-open-jdk)
@@ -350,7 +404,98 @@ func (c *Client) InstallEditorWithOptions(options InstallOptions) error {
 		}
 	}
 
-	return c.executeHubCommand("Installing Unity Editor", "install Unity Editor", args)
+	if err := c.executeHubCommand("Installing Unity Editor", "install Unity Editor", args); err != nil {
+		return InstallOutcome{}, err
+	}
+
+	_, path, err := c.IsEditorInstalled(options.Version)
+	if err != nil {
+		ui.Debug("Failed to resolve installed editor path", "error", err)
+	}
+
+	// Editor discovery resolves by version alone, so with several
+	// architectures of one version installed it can hand back a different
+	// one's path. Report no path rather than a wrong one.
+	if !c.ArchitectureMatches(path, options.Architecture) {
+		ui.Debug("Installed editor path does not match the requested architecture",
+			"path", path, "architecture", options.Architecture)
+		path = ""
+	}
+
+	return InstallOutcome{Path: path, Modules: installedModules}, nil
+}
+
+// ArchitectureMatches reports whether the editor installed at editorPath was
+// built for the requested architecture. Unity Hub installs each architecture
+// into its own directory, so an arm64 install does not satisfy an explicit
+// x86_64 request.
+//
+// An empty request matches anything: the caller did not ask for a specific
+// architecture, so a working editor is what they wanted. An editor whose
+// architecture Unity Hub did not record also matches, rather than triggering a
+// multi-gigabyte reinstall on a guess.
+func (c *Client) ArchitectureMatches(editorPath, architecture string) bool {
+	if architecture == "" {
+		return true
+	}
+
+	installed := c.recordedArchitecture(editorPath)
+	return installed == "" || installed == architecture
+}
+
+// recordedArchitecture reads the architecture from the metadata.hub.json that
+// Unity Hub writes in the editor's install directory. It works off the
+// discovered editor path rather than the configured install root, because an
+// editor can be found through editors-v2.json, a secondary install path, or a
+// `<version>-<architecture>` directory.
+func (c *Client) recordedArchitecture(editorPath string) string {
+	root := editorInstallRoot(editorPath)
+	if root == "" {
+		return ""
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, "metadata.hub.json"))
+	if err != nil {
+		return ""
+	}
+
+	var metadata struct {
+		Architecture string `json:"architecture"`
+	}
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		ui.Debug("Failed to parse editor metadata", "path", root, "error", err)
+		return ""
+	}
+
+	return metadata.Architecture
+}
+
+// editorInstallRoot returns the directory that holds metadata.hub.json for a
+// discovered editor path, or "" when the shape is not recognised.
+//
+// The path can be the install directory itself (editors-v2.json records it that
+// way), `<root>/Unity.app` on macOS, or `<root>/Editor/Unity[.exe]` elsewhere.
+// The shape is matched explicitly rather than walking up blindly, because an
+// unrelated metadata.hub.json in a shared parent directory would otherwise be
+// read as this editor's.
+func editorInstallRoot(editorPath string) string {
+	if editorPath == "" {
+		return ""
+	}
+
+	switch filepath.Base(editorPath) {
+	case "Unity.app":
+		return filepath.Dir(editorPath)
+	case "Unity", "Unity.exe":
+		parent := filepath.Dir(editorPath)
+		if filepath.Base(parent) == "Editor" {
+			return filepath.Dir(parent)
+		}
+		return parent
+	default:
+		// Recorded as the install directory itself.
+		return editorPath
+	}
 }
 
 func (c *Client) detectArchitecture() string {
@@ -745,11 +890,36 @@ var modulePathMap = map[string]string{
 	"mac-il2cpp":     "MacStandaloneSupport",
 }
 
+// canonicalModuleIDs holds the Unity Hub module ids that moduleMap resolves to.
+// The install TUI reads module ids straight from the release metadata and
+// passes them through, so those must be accepted as-is.
+var canonicalModuleIDs = func() map[string]bool {
+	ids := make(map[string]bool, len(moduleMap))
+	for _, id := range moduleMap {
+		ids[id] = true
+	}
+	return ids
+}()
+
+// resolveModuleID converts a friendly alias or an already-canonical Unity Hub
+// module id into the canonical id, case-insensitively. It returns "" when the
+// module is neither.
+func resolveModuleID(module string) string {
+	lowered := strings.ToLower(module)
+	if mapped, ok := moduleMap[lowered]; ok {
+		return mapped
+	}
+	if canonicalModuleIDs[lowered] {
+		return lowered
+	}
+	return ""
+}
+
 func (c *Client) mapModules(modules []string) []string {
 	var mapped []string
 	for _, module := range modules {
-		if mappedModule, ok := moduleMap[strings.ToLower(module)]; ok {
-			mapped = append(mapped, mappedModule)
+		if id := resolveModuleID(module); id != "" {
+			mapped = append(mapped, id)
 		} else {
 			ui.Warn("Unknown module: %s", module)
 		}
@@ -897,10 +1067,11 @@ func (c *Client) readModulesFile(editorPath string) ([]moduleFileEntry, error) {
 
 // IsModuleInstalled checks if a specific module is installed for an editor
 func (c *Client) IsModuleInstalled(editorPath string, module string) bool {
-	// Map user-friendly name to Hub CLI module ID first
+	// Map a friendly name or a differently-cased canonical id to the canonical
+	// Hub CLI module ID first, so the comparisons below line up.
 	moduleID := module
-	if mapped, ok := moduleMap[strings.ToLower(module)]; ok {
-		moduleID = mapped
+	if id := resolveModuleID(module); id != "" {
+		moduleID = id
 	}
 
 	// Try to read from modules.json first
@@ -946,19 +1117,38 @@ func (c *Client) GetMissingModules(editorPath string, modules []string) []string
 	return missing
 }
 
-// InstallModules installs additional modules to an existing editor
-func (c *Client) InstallModules(version string, modules []string) error {
+// InstallModules installs additional modules to an existing editor.
+// It takes the same lock as installing the editor, because Unity Hub downloads
+// into and writes into the same editor directory.
+// It returns the modules Unity Hub was actually given: unknown ones are
+// dropped, and callers must not report those as installed.
+func (c *Client) InstallModules(version string, modules []string) ([]string, error) {
 	if c.hubPath == "" {
-		return fmt.Errorf("unity hub not found")
+		return nil, fmt.Errorf("unity hub not found")
 	}
 
 	if len(modules) == 0 {
-		return nil
+		return nil, nil
 	}
 
-	args := []string{"--", "--headless", "install-modules", "--version", version}
-
 	moduleList := c.mapModules(modules)
+	if len(moduleList) == 0 {
+		return nil, fmt.Errorf("none of the requested modules are known: %s", strings.Join(modules, ", "))
+	}
+
+	var installed []string
+	err := c.withEditorLock(version, func() error {
+		var err error
+		installed, err = c.installModulesLocked(version, moduleList)
+		return err
+	})
+	return installed, err
+}
+
+// installModulesLocked installs already-resolved canonical module ids with the
+// editor lock held.
+func (c *Client) installModulesLocked(version string, moduleList []string) ([]string, error) {
+	args := []string{"--", "--headless", "install-modules", "--version", version}
 	for _, mod := range moduleList {
 		args = append(args, "--module", mod)
 	}
@@ -966,7 +1156,10 @@ func (c *Client) InstallModules(version string, modules []string) error {
 	// Add --childModules flag to automatically install child modules (e.g., android-open-jdk)
 	args = append(args, "--childModules")
 
-	return c.executeHubCommand("Installing modules", "install modules", args)
+	if err := c.executeHubCommand("Installing modules", "install modules", args); err != nil {
+		return nil, err
+	}
+	return moduleList, nil
 }
 
 // executeHubCommand runs a Unity Hub CLI command with the given arguments
@@ -983,8 +1176,29 @@ func (c *Client) executeHubCommand(debugMsg, operation string, args []string) er
 	defer signal.Stop(sigChan)
 
 	cmd := exec.CommandContext(ctx, c.hubPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	// Unity Hub redraws its progress block with cursor-control sequences even
+	// when stdout is a pipe. On a non-TTY that yields an unreadable log and,
+	// worse, no output at all until exit when piped through tail or grep, so
+	// callers cannot tell a running install from a hung one.
+	if ui.IsTTY() && !c.ProgressJSON {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		stdoutFilter := newProgressFilter(os.Stdout, c.ProgressJSON)
+		// stderr carries diagnostics for humans, so it stays plain text even
+		// when stdout is a machine-readable stream.
+		stderrFilter := newProgressFilter(os.Stderr, false)
+		defer func() {
+			for _, filter := range []*progressFilter{stdoutFilter, stderrFilter} {
+				if err := filter.Close(); err != nil {
+					ui.Debug("Failed to flush progress filter", "error", err)
+				}
+			}
+		}()
+		cmd.Stdout = stdoutFilter
+		cmd.Stderr = stderrFilter
+	}
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
@@ -1004,7 +1218,8 @@ func (c *Client) executeHubCommand(debugMsg, operation string, args []string) er
 		}
 		return nil
 	case sig := <-sigChan:
-		ui.Muted("\nReceived %s, stopping Unity Hub...", sig)
+		// stderr: stdout may be carrying machine-readable output.
+		ui.Note("\nReceived %s, stopping Unity Hub...", sig)
 		cancel() // This will send SIGKILL to the process
 		<-done   // Wait for process to exit
 		return fmt.Errorf("interrupted by %s", sig)

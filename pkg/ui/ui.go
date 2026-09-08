@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -81,9 +80,13 @@ func Success(format string, args ...any) {
 	fmt.Println(successStyle.Render("✓ " + fmt.Sprintf(format, args...)))
 }
 
-// Warn prints a warning message
+// Warn prints a warning message to stderr.
+//
+// Warnings go to stderr so they never corrupt stdout, which carries the
+// command's actual result — including machine-readable output such as
+// --output json.
 func Warn(format string, args ...any) {
-	fmt.Println(warnStyle.Render("⚠ " + fmt.Sprintf(format, args...)))
+	fmt.Fprintln(os.Stderr, warnStyle.Render("⚠ "+fmt.Sprintf(format, args...)))
 }
 
 // Error prints an error message to stderr
@@ -152,8 +155,9 @@ func (m spinnerModel) View() string {
 	return fmt.Sprintf("%s %s", m.spinner.View(), m.message)
 }
 
-// isTTY checks if stdout is a terminal
-func isTTY() bool {
+// isTTY checks if stdout is a terminal. It is a variable so tests can
+// exercise both the TTY and non-TTY paths.
+var isTTY = func() bool {
 	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
 }
 
@@ -198,38 +202,6 @@ func WithSpinnerNoResult(message string, task func() error) error {
 		return struct{}{}, task()
 	})
 	return err
-}
-
-// StartSpinner starts a spinner and returns a stop function
-// Use this for long-running operations where you need more control
-func StartSpinner(message string) func(success bool, resultMsg string) {
-	done := make(chan struct{})
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				fmt.Printf("\r%s %s", s.View(), message)
-				time.Sleep(100 * time.Millisecond)
-				s, _ = s.Update(s.Tick())
-			}
-		}
-	}()
-
-	return func(success bool, resultMsg string) {
-		close(done)
-		fmt.Print("\r\033[K") // Clear line
-		if success {
-			Success("%s", resultMsg)
-		} else {
-			Error("%s", resultMsg)
-		}
-	}
 }
 
 // SelectOption represents an option in a selection list
