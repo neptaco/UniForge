@@ -124,7 +124,7 @@ func (d *Daemon) Lock() error {
 		return ErrAlreadyLocked
 	}
 
-	if err := ensureDir(d.config.runtimeDir); err != nil {
+	if err := prepareRuntimeDir(d.config); err != nil {
 		return err
 	}
 
@@ -133,9 +133,15 @@ func (d *Daemon) Lock() error {
 		return err
 	}
 
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return wrapErr("open lock file", err)
+	}
+	// The mode above only applies on creation; tighten a lock file left behind
+	// by an older release that created it world-readable.
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		return wrapErr("restrict lock file permissions", err)
 	}
 
 	if err := lockFile(f); err != nil {
@@ -184,7 +190,7 @@ func (d *Daemon) Listen(metadata json.RawMessage) (net.Listener, error) {
 		return nil, ErrAlreadyListening
 	}
 
-	if err := ensureDir(d.config.runtimeDir); err != nil {
+	if err := prepareRuntimeDir(d.config); err != nil {
 		return nil, err
 	}
 
@@ -245,6 +251,17 @@ func ensureDir(dirFn func() (string, error)) error {
 		return err
 	}
 	return os.MkdirAll(dir, 0o755)
+}
+
+// prepareRuntimeDir resolves the runtime directory for config and hands it to
+// the platform-specific [ensureRuntimeDir], which creates it private to the
+// current user.
+func prepareRuntimeDir(config Config) error {
+	dir, err := config.runtimeDir()
+	if err != nil {
+		return err
+	}
+	return ensureRuntimeDir(dir)
 }
 
 func wrapErr(msg string, err error) error {

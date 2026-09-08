@@ -166,7 +166,7 @@ func startUnlocked(ctx context.Context, config Config, opts StartOptions) error 
 		}
 	}
 
-	if err := ensureDir(config.runtimeDir); err != nil {
+	if err := prepareRuntimeDir(config); err != nil {
 		return err
 	}
 	if err := ensureDir(config.stateDir); err != nil {
@@ -235,7 +235,7 @@ func startUnlocked(ctx context.Context, config Config, opts StartOptions) error 
 }
 
 func acquireLifecycleLock(ctx context.Context, config Config) (*os.File, error) {
-	if err := ensureDir(config.runtimeDir); err != nil {
+	if err := prepareRuntimeDir(config); err != nil {
 		return nil, err
 	}
 	path, err := config.lifecycleLockPath()

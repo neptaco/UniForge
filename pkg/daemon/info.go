@@ -64,7 +64,7 @@ func ReadInfo(config Config) (*Info, error) {
 }
 
 func writeInfo(config Config, info Info) error {
-	if err := ensureDir(config.runtimeDir); err != nil {
+	if err := prepareRuntimeDir(config); err != nil {
 		return err
 	}
 

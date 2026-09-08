@@ -21,12 +21,25 @@ func unlockFile(f *os.File) {
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 }
 
-// createListener creates a Unix domain socket listener.
+// createListener creates a Unix domain socket listener restricted to the
+// current user: the socket is chmod'ed to 0600 and every accepted connection is
+// checked against the current uid.
 func createListener(info Info) (net.Listener, error) {
 	if info.Transport == TransportUnix {
 		_ = os.Remove(info.Endpoint) // clean up stale socket
 	}
-	return net.Listen("unix", info.Endpoint)
+	listener, err := net.Listen("unix", info.Endpoint)
+	if err != nil {
+		return nil, err
+	}
+	// The runtime directory is already 0700, so nothing can reach the socket
+	// between Listen and Chmod. Narrow the socket itself anyway, as a second
+	// line of defense if the directory mode is ever loosened.
+	if err := os.Chmod(info.Endpoint, 0o600); err != nil {
+		_ = listener.Close()
+		return nil, wrapErr("restrict socket permissions", err)
+	}
+	return newPeerCheckedListener(listener, uint32(os.Getuid())), nil
 }
 
 // dialTransport connects to the daemon using the advertised transport.
