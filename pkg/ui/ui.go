@@ -3,6 +3,7 @@ package ui
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/mattn/go-isatty"
+	"github.com/muesli/termenv"
 )
 
 var (
@@ -23,13 +25,36 @@ var (
 	mutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 
 	// Logger for debug output
-	logger = log.NewWithOptions(os.Stderr, log.Options{
-		ReportTimestamp: false,
-	})
+	logger = newLogger(os.Stderr)
 
 	// Debug mode flag
 	debugMode = false
 )
+
+// nonTerminalWriter hides the underlying *os.File from termenv so that it
+// treats the writer as a non-terminal. termenv only sends terminal queries
+// (OSC 10/11 foreground/background color requests followed by CSI 6n) when it
+// can see a terminal file descriptor.
+type nonTerminalWriter struct {
+	io.Writer
+}
+
+// newLogger builds the stderr logger without querying the terminal.
+//
+// charmbracelet/log constructs its renderer with termenv.WithColorCache(true),
+// which eagerly asks the terminal for its colors. When the CLI runs while the
+// shell is initialising (e.g. `eval "$(uniforge completion zsh)"`), the
+// terminal's replies end up in the shell's input buffer and pollute the
+// prompt. Wrapping the writer suppresses those queries; the color profile is
+// then restored from the environment (TERM, COLORTERM, NO_COLOR, ...), which
+// needs no terminal round trip.
+func newLogger(w *os.File) *log.Logger {
+	l := log.NewWithOptions(nonTerminalWriter{Writer: w}, log.Options{
+		ReportTimestamp: false,
+	})
+	l.SetColorProfile(termenv.NewOutput(w).EnvColorProfile())
+	return l
+}
 
 // SetDebugMode enables or disables debug output
 func SetDebugMode(enabled bool) {
